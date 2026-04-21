@@ -1,4 +1,4 @@
-# AppleNotesKit
+# NotesAutomation
 
 Swift library for driving Apple Notes.app on macOS. Wraps AppleScript
 (via `NSAppleScript`) — Notes.app has no public Swift framework.
@@ -11,14 +11,14 @@ external dependencies.
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/chrischall/AppleNotesKit.git", from: "0.1.0"),
+    .package(url: "https://github.com/chrischall/swift-notes-automation.git", from: "0.1.0"),
 ]
 ```
 
 ## Quickstart
 
 ```swift
-import AppleNotesKit
+import NotesAutomation
 
 let notes = NoteService(runner: NSAppleScriptRunner())
 
@@ -68,7 +68,7 @@ should declare `NSAppleEventsUsageDescription` in its `Info.plist`.
 `AppleScriptRunner` is a public protocol, so tests can inject a fake:
 
 ```swift
-import AppleNotesKit
+import NotesAutomation
 
 final class FakeRunner: AppleScriptRunner {
     var response = ""

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import AppleNotesKit
+@testable import NotesAutomation
 
 @Suite("NoteService")
 struct NoteServiceTests {

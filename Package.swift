@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "AppleNotesKit",
+    name: "swift-notes-automation",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "AppleNotesKit", targets: ["AppleNotesKit"]),
+        .library(name: "NotesAutomation", targets: ["NotesAutomation"]),
     ],
     targets: [
-        .target(name: "AppleNotesKit"),
+        .target(name: "NotesAutomation"),
         .testTarget(
-            name: "AppleNotesKitTests",
-            dependencies: ["AppleNotesKit"]
+            name: "NotesAutomationTests",
+            dependencies: ["NotesAutomation"]
         ),
     ]
 )

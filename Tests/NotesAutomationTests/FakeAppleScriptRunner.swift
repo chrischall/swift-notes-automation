@@ -1,5 +1,5 @@
 import Foundation
-import AppleNotesKit
+import NotesAutomation
 
 /// In-memory AppleScriptRunner for tests. Records every script it was asked
 /// to run, and replies with a queued result or a constant.
