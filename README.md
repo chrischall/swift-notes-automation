@@ -1,9 +1,13 @@
 # NotesAutomation
 
+[![CI](https://github.com/chrischall/swift-notes-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/chrischall/swift-notes-automation/actions/workflows/ci.yml)
+[![Swift](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fchrischall%2Fswift-notes-automation%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/chrischall/swift-notes-automation)
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fchrischall%2Fswift-notes-automation%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/chrischall/swift-notes-automation)
+
 Swift library for driving Apple Notes.app on macOS. Wraps AppleScript
 (via `NSAppleScript`) — Notes.app has no public Swift framework.
 
-Platform: macOS 14+. Pure Swift 6 with strict concurrency. Zero
+Platform: **macOS 14+**. Pure Swift 6 with strict concurrency. Zero
 external dependencies.
 
 ## Install
@@ -38,6 +42,32 @@ let id = try await notes.create(
     folder: "Work"
 )
 ```
+
+## API reference
+
+### `NoteService`
+
+The main entry point. Construct once, reuse across calls. All methods
+are async and throw `AppleScriptError` or `NoteServiceError`.
+
+| Method | Purpose |
+|---|---|
+| `list(limit:) -> [Note]` | Most-recently-modified notes |
+| `search(query:limit:) -> [Note]` | Substring match against name OR body |
+| `create(title:body:folder:) -> String` | Create a note; returns id |
+
+### `Note`
+
+```swift
+id: String        // opaque Notes.app id
+title: String     // name of note
+snippet: String   // ~200 chars of body
+folder: String    // containing folder name
+```
+
+### `AppleScriptRunner` / `NSAppleScriptRunner`
+
+Protocol + production impl. Inject a fake in unit tests (see below).
 
 ## Capabilities and limits
 

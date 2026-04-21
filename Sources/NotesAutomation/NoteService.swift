@@ -1,7 +1,13 @@
 import Foundation
 
+/// Errors surfaced by `NoteService` operations.
 public enum NoteServiceError: Error, Equatable, Sendable {
+    /// AppleScript ran but Notes.app reported a non-success result, or the
+    /// returned payload couldn't be parsed. The string carries context
+    /// for debugging.
     case scriptFailure(String)
+    /// Caller passed an empty / whitespace-only string for a required
+    /// parameter (title, typically).
     case invalidInput(String)
 }
 
@@ -17,12 +23,26 @@ public struct NoteService: Sendable {
 
     // MARK: - List / Search
 
+    /// Returns the most-recently-modified notes, up to `limit`.
+    ///
+    /// - Parameter limit: Maximum notes to return (default 20).
+    /// - Returns: Notes in Notes.app's native iteration order (typically
+    ///   most-recently-modified first).
+    /// - Throws: `AppleScriptError.runtime` if Notes is not running or
+    ///   Automation permission is denied.
     public func list(limit: Int = 20) async throws -> [Note] {
         let source = Self.listOrSearchScript(query: nil, limit: limit)
         let raw = try await runner.run(source: source)
         return Self.parseNoteLines(raw)
     }
 
+    /// Searches notes by name or body substring. Case-insensitive;
+    /// matches either `name` OR `body` via Notes.app's `whose` clause.
+    ///
+    /// - Parameters:
+    ///   - query: Substring to match. Empty / whitespace-only returns `[]`
+    ///     without running a script.
+    ///   - limit: Maximum results (default 20).
     public func search(query: String, limit: Int = 20) async throws -> [Note] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
         let source = Self.listOrSearchScript(query: query, limit: limit)
@@ -32,6 +52,18 @@ public struct NoteService: Sendable {
 
     // MARK: - Create
 
+    /// Creates a new note with `title` and `body`. The body is wrapped
+    /// in Notes.app's HTML-ish format with the title as `<h1>` so the
+    /// UI shows a proper heading.
+    ///
+    /// - Parameters:
+    ///   - title: Note name. Required, non-empty.
+    ///   - body: Note body. HTML allowed but quotes/newlines are
+    ///     escaped for you.
+    ///   - folder: Optional folder name to place the note in. If the
+    ///     folder doesn't exist, it's created.
+    /// - Returns: The newly-created note's opaque id (matches the
+    ///   `id` on `Note` values returned by `list` / `search`).
     public func create(title: String, body: String, folder: String? = nil) async throws -> String {
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw NoteServiceError.invalidInput("title is required")
