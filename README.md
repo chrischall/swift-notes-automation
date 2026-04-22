@@ -22,7 +22,7 @@ external dependencies (SQLite is via the system `SQLite3` module).
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/chrischall/swift-notes-automation.git", from: "1.0.0"),
+    .package(url: "https://github.com/chrischall/swift-notes-automation.git", from: "1.1.0"),
 ]
 ```
 
