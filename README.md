@@ -4,11 +4,18 @@
 [![Swift](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fchrischall%2Fswift-notes-automation%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/chrischall/swift-notes-automation)
 [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fchrischall%2Fswift-notes-automation%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/chrischall/swift-notes-automation)
 
-Swift library for driving Apple Notes.app on macOS. Wraps AppleScript
-(via `NSAppleScript`) — Notes.app has no public Swift framework.
+Swift library for driving Apple Notes.app on macOS. Two complementary
+access paths:
+
+- **`NoteService`** — AppleScript-backed. All CRUD (create, list,
+  search, delete). Goes through Notes.app → CloudKit, so writes sync
+  to iCloud automatically.
+- **`NoteStoreReader`** — direct read-only SQLite access to
+  `NoteStore.sqlite`. Roughly 100× faster than AppleScript for list
+  and search. Requires Full Disk Access.
 
 Platform: **macOS 14+**. Pure Swift 6 with strict concurrency. Zero
-external dependencies.
+external dependencies (SQLite is via the system `SQLite3` module).
 
 ## Install
 
@@ -41,20 +48,51 @@ let id = try await notes.create(
     body: "- Ship release\n- Review PRs",
     folder: "Work"
 )
+
+// Delete — permanent; bypasses the Recently Deleted folder
+try await notes.delete(id: id)
 ```
+
+### Fast read path
+
+For list/search over large note libraries, `NoteStoreReader` reads
+`NoteStore.sqlite` directly — no AppleScript round-trips, so listing a
+thousand notes takes milliseconds:
+
+```swift
+let reader = try NoteStoreReader()
+let notes = try await reader.list(limit: 50)
+let hits  = try await reader.search(query: "groceries")
+```
+
+`NoteStoreReader` is **read-only** by design. Use `NoteService` for
+create/delete — writes go through Notes.app so iCloud sync keeps
+working. Requires Full Disk Access on macOS (see *Permissions*).
 
 ## API reference
 
 ### `NoteService`
 
-The main entry point. Construct once, reuse across calls. All methods
-are async and throw `AppleScriptError` or `NoteServiceError`.
+AppleScript-backed CRUD. Construct once, reuse across calls. All
+methods are async and throw `AppleScriptError` or `NoteServiceError`.
 
 | Method | Purpose |
 |---|---|
 | `list(limit:) -> [Note]` | Most-recently-modified notes |
 | `search(query:limit:) -> [Note]` | Substring match against name OR body |
 | `create(title:body:folder:) -> String` | Create a note; returns id |
+| `delete(id:)` | Permanently delete by id |
+
+### `NoteStoreReader`
+
+Direct read-only SQLite reader. Methods are async and throw
+`NoteStoreReaderError`.
+
+| Method | Purpose |
+|---|---|
+| `init(path:)` | Open `NoteStore.sqlite`. Defaults to standard location. |
+| `list(limit:) -> [Note]` | Fast equivalent of `NoteService.list` |
+| `search(query:limit:) -> [Note]` | Fast equivalent of `NoteService.search` |
 
 ### `Note`
 
@@ -72,27 +110,33 @@ Protocol + production impl. Inject a fake in unit tests (see below).
 ## Capabilities and limits
 
 **Supported:**
-- List recent notes
-- Search by name/body substring
+- List recent notes (via `NoteService` or fast `NoteStoreReader`)
+- Search by name/body substring (via either path)
 - Create notes in any folder (folder created if missing)
 - Delete notes by id
 
 **Not supported (yet):**
 - Update (Notes AppleScript supports it; happy to take a PR)
-- Rich HTML content (plaintext in, HTML-wrapped title on create)
+- Rich HTML content on read (plaintext snippet only; body is Core Data +
+  protobuf)
+- Attachments
 - iCloud sync state
-- Reading per-note attachments
 
-Anything that requires parsing Notes's Core Data + protobuf-encoded
-body storage (`~/Library/Group Containers/group.com.apple.notes/
-NoteStore.sqlite`) is out of scope — the Ruby `apple_cloud_notes_parser`
-and Rust `apple-notes-liberator` projects cover that territory.
+Full parsing of the protobuf-encoded body (`ZICCLOUDSYNCINGOBJECT.ZDATA`)
+is still out of scope — the Ruby `apple_cloud_notes_parser` and Rust
+`apple-notes-liberator` projects cover that territory.
 
 ## Permissions
 
-The calling process needs **Automation** for Notes (System Settings →
-Privacy & Security → Automation → Your binary → Notes). Your binary
-should declare `NSAppleEventsUsageDescription` in its `Info.plist`.
+- **`NoteService`** needs **Automation** access to Notes (System
+  Settings → Privacy & Security → Automation → Your binary → Notes).
+  Your binary should declare `NSAppleEventsUsageDescription` in its
+  `Info.plist`.
+- **`NoteStoreReader`** needs **Full Disk Access** (System Settings →
+  Privacy & Security → Full Disk Access) so macOS lets your binary
+  read `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite`.
+  The reader throws `NoteStoreReaderError.databaseNotAccessible` with a
+  remediation hint if the grant is missing.
 
 ## Testing
 

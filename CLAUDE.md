@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Swift 6 library that wraps Apple Notes.app on macOS by driving it via `NSAppleScript`. Notes.app exposes no public Swift framework, so AppleScript is the only interface. Target: macOS 14+. Zero external dependencies. Strict concurrency is on (all public types are `Sendable`).
+Swift 6 library that exposes Apple Notes.app on macOS via two complementary paths:
+
+- **`NoteService`** — AppleScript-backed (`NSAppleScript`). Handles all writes (create/delete) and read-via-Notes.app. Goes through CloudKit so iCloud sync stays coherent.
+- **`NoteStoreReader`** — direct read-only SQLite access to `NoteStore.sqlite`. ~100× faster for list/search. Requires Full Disk Access.
+
+Target: macOS 14+. Zero external dependencies (SQLite is the system `SQLite3` module; no SPM dep needed). Strict concurrency is on (all public types are `Sendable`).
 
 ## Commands
 
@@ -14,23 +19,36 @@ swift build -c release       # release build (what the Release workflow runs)
 swift test                   # pure-Swift tests only — live suites are opt-in
 swift test --filter NoteServiceTests.parseNotes        # single test
 swift test --filter NSAppleScriptRunnerTests           # whole suite by name
-NOTES_AUTOMATION_INTEGRATION=1 swift test              # also run the two opt-in live suites
+NOTES_AUTOMATION_INTEGRATION=1 swift test              # also run AppleScript live suites
+NOTES_SQLITE_INTEGRATION=1 swift test                  # also run NoteStoreReader integration suite
 ```
 
-- Two test suites are opt-in and share the same env var gate (`NOTES_AUTOMATION_INTEGRATION=1`):
-  - `NoteServiceIntegrationTests` — exercises real Notes.app. Requires **Automation** permission for the test binary (System Settings → Privacy & Security → Automation → xctest binary → Notes, granted on first prompt).
-  - `NSAppleScriptRunnerTests` — exercises the real `NSAppleScript` bridge with trivial scripts (no permission needed). Opt-in because the bridge misbehaves inside xctest bundles on recent macOS — see the AppleScript quirks section below.
+- Three test suites are opt-in, gated by env vars:
+  - `NoteServiceIntegrationTests` (`NOTES_AUTOMATION_INTEGRATION=1`) — exercises real Notes.app. Requires **Automation** permission for the test binary (System Settings → Privacy & Security → Automation → xctest binary → Notes, granted on first prompt).
+  - `NSAppleScriptRunnerTests` (`NOTES_AUTOMATION_INTEGRATION=1`) — exercises the real `NSAppleScript` bridge with trivial scripts (no permission needed). Opt-in because the bridge misbehaves inside xctest bundles on recent macOS — see the AppleScript quirks section below.
+  - `NoteStoreReaderIntegrationTests` (`NOTES_SQLITE_INTEGRATION=1`) — exercises the real `NoteStore.sqlite`. Requires **Full Disk Access** for the test binary.
 - Without the env var, every test in those suites is skipped via a `.disabled(if:)` trait, so CI stays deterministic and permission-prompt-free.
 - Release: push a `vX.Y.Z` tag. `.github/workflows/release.yml` validates it on `macos-15` (release build + `swift test`) and publishes a GitHub Release with auto-generated notes.
 
 ## Architecture
 
+Two independent access paths, picked per-call by the consumer based on which tradeoffs fit best.
+
+### AppleScript path (writes + reads)
+
 Two-layer design so Notes-driving code can be unit-tested without a real Notes.app:
 
 - **`AppleScriptRunner` protocol** (`Sources/NotesAutomation/AppleScriptRunner.swift`) — single async `run(source:) -> String` method. Production impl is `NSAppleScriptRunner`; tests use `FakeAppleScriptRunner` which queues string/error responses and records every call.
-- **`NoteService`** (`Sources/NotesAutomation/NoteService.swift`) — the public API (`list`, `search`, `create`). It *generates* AppleScript source strings and hands them to an injected runner. The service itself is a value type with no mutable state.
+- **`NoteService`** (`Sources/NotesAutomation/NoteService.swift`) — the public API (`list`, `search`, `create`, `delete`). It *generates* AppleScript source strings and hands them to an injected runner. The service itself is a value type with no mutable state.
 
 This split means `NoteService`'s logic — script generation, output parsing, input validation — is fully testable without AppleScript ever running. Only the `NSAppleScriptRunner` layer touches the system bridge, and it isolates the non-`Sendable` `NSAppleScript` object by compiling + executing inside `Task.detached`.
+
+### SQLite path (reads only)
+
+- **`NoteStoreReader`** (`Sources/NotesAutomation/NoteStoreReader.swift`) — `actor` that holds an `OpaquePointer` to an `sqlite3*` opened via the system `SQLite3` module. No SPM dep. `nonisolated(unsafe)` on the handle because access is serialized through the actor and the nonisolated deinit runs after the last reference is gone.
+- Queries the subset of the Notes schema documented in the reader's doc comment: `ZICCLOUDSYNCINGOBJECT` joined against `Z_PRIMARYKEY` (to filter to `ICNote` entities), left-joined to itself for `ZFOLDER → ZTITLE2` folder names. `ZMARKEDFORDELETION` filter + `ZMODIFICATIONDATE1` ordering. Store UUID is read from `Z_METADATA.Z_UUID` once at init to synthesize `x-coredata://…` ids compatible with `NoteService`'s AppleScript-returned ids.
+- Tests use `NoteStoreFixture` (test target) to build a throwaway `.sqlite` with the minimum schema subset the reader queries. Update `NoteStoreFixture.schema` if you add new columns to a query — the fixture is deliberately minimal so adding columns gates on a single, obvious place.
+- **Schema drift is the biggest risk.** Apple renames columns across macOS releases (the `1` suffix on `ZTITLE1` / `ZMODIFICATIONDATE1` is itself an artifact of a prior rename). If a future macOS breaks the query, fix it under a version check and keep the old column as a fallback — never silently return empty.
 
 ### Non-obvious AppleScript quirks to respect
 
