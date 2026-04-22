@@ -1,7 +1,9 @@
 name: Release
 
-# Fires on any v* tag push. Validates the tag builds cleanly on CI's
-# macOS runner, then creates a GitHub Release with auto-generated notes.
+# Fires on any v* tag push. Validates the tag matches VERSION, builds a
+# release + runs tests on macOS, generates a DocC archive, and creates a
+# GitHub Release with auto-generated notes plus the DocC zip attached.
+
 on:
   push:
     tags:
@@ -10,13 +12,50 @@ on:
 jobs:
   validate:
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
       - run: sudo xcode-select --switch /Applications/Xcode.app
       - run: swift --version
+
+      - name: Check VERSION matches tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          FILE=$(tr -d '[:space:]' < VERSION)
+          if [ "$TAG" != "$FILE" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match VERSION (${FILE}) — aborting."
+            exit 1
+          fi
+          echo "VERSION=${FILE}" >> "$GITHUB_ENV"
+
       - run: swift build -c release
       - run: swift test
+
+      - name: Build DocC archive
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild docbuild \
+            -scheme NotesAutomation \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath .build/docc | tail -50
+          ARCHIVE=$(find .build/docc -name '*.doccarchive' -type d | head -1)
+          if [ -z "$ARCHIVE" ]; then
+            echo "No .doccarchive produced — skipping DocC artifact."
+            exit 0
+          fi
+          OUT="NotesAutomation-${VERSION}.doccarchive"
+          cp -R "$ARCHIVE" "$OUT"
+          zip -qr "NotesAutomation-${VERSION}-docs.zip" "$OUT"
+
+      - name: Upload DocC artifact
+        if: hashFiles('NotesAutomation-*-docs.zip') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: docc-archive
+          path: NotesAutomation-*-docs.zip
+          retention-days: 7
 
   release:
     needs: validate
@@ -25,15 +64,28 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download DocC artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: docc-archive
+          path: ./dist
+
+      - name: Compute version (strip leading v)
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: |
+            dist/*.zip
           body: |
             Install via SwiftPM:
 
             ```swift
-            .package(url: "https://github.com/chrischall/swift-notes-automation.git", from: "${{ github.ref_name }}"),
+            .package(url: "https://github.com/chrischall/swift-notes-automation.git", from: "${{ env.VERSION }}"),
             ```
 
             ```swift
