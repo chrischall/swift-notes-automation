@@ -251,4 +251,58 @@ struct NoteServiceTests {
             _ = try await svc.create(title: "X", body: "Y")
         }
     }
+
+    // ─── delete ────────────────────────────────────────────────────────────
+
+    @Test("deleteScript targets the note by id and calls delete")
+    func deleteScriptShape() {
+        let script = NoteService.deleteScript(id: "x-coredata://notes/abc")
+        #expect(script.contains("tell application \"Notes\""))
+        // Looks up the note by id, then issues a delete.
+        #expect(script.contains("x-coredata://notes/abc"))
+        #expect(script.contains("delete"))
+    }
+
+    @Test("deleteScript escapes double-quotes in the id")
+    func deleteScriptEscapesQuotes() {
+        // IDs from Notes are opaque URIs but we still treat them as strings
+        // and interpolate into AppleScript literals — escape defensively.
+        let script = NoteService.deleteScript(id: "weird\"id")
+        #expect(script.contains("weird\\\"id"))
+    }
+
+    @Test("delete rejects empty / whitespace-only ids")
+    func deleteRejectsEmpty() async throws {
+        let svc = NoteService(runner: FakeAppleScriptRunner())
+        await #expect(throws: NoteServiceError.self) {
+            try await svc.delete(id: "")
+        }
+        await #expect(throws: NoteServiceError.self) {
+            try await svc.delete(id: "   ")
+        }
+    }
+
+    @Test("delete dispatches the script to the runner")
+    func deleteDispatches() async throws {
+        let runner = FakeAppleScriptRunner()
+        runner.queue("")
+        let svc = NoteService(runner: runner)
+
+        try await svc.delete(id: "x-coredata://notes/42")
+
+        #expect(runner.calls.count == 1)
+        #expect(runner.calls[0].contains("x-coredata://notes/42"))
+        #expect(runner.calls[0].contains("delete"))
+    }
+
+    @Test("delete propagates runner errors")
+    func deletePropagates() async throws {
+        let runner = FakeAppleScriptRunner()
+        runner.queueError("Can't get note id \"bogus\"")
+        let svc = NoteService(runner: runner)
+
+        await #expect(throws: AppleScriptError.self) {
+            try await svc.delete(id: "bogus")
+        }
+    }
 }

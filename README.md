@@ -75,9 +75,10 @@ Protocol + production impl. Inject a fake in unit tests (see below).
 - List recent notes
 - Search by name/body substring
 - Create notes in any folder (folder created if missing)
+- Delete notes by id
 
 **Not supported (yet):**
-- Update/delete (Notes AppleScript supports both; happy to take a PR)
+- Update (Notes AppleScript supports it; happy to take a PR)
 - Rich HTML content (plaintext in, HTML-wrapped title on create)
 - iCloud sync state
 - Reading per-note attachments

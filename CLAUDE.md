@@ -48,6 +48,6 @@ This split means `NoteService`'s logic — script generation, output parsing, in
 
 ## Adding functionality
 
-The README lists capabilities deliberately omitted (update, delete, rich HTML, attachments, iCloud state). Notes.app's AppleScript dictionary supports update and delete — the natural extension is to add `update(id:...)` / `delete(id:)` following the same script-generation + fake-runner test pattern. Anything requiring direct parsing of `NoteStore.sqlite` (Core Data + protobuf body) is out of scope.
+The README lists capabilities deliberately omitted (update, rich HTML, attachments, iCloud state). Notes.app's AppleScript dictionary supports update — the natural extension is to add `update(id:...)` following the same script-generation + fake-runner test pattern used by `delete(id:)`. Anything requiring direct parsing of `NoteStore.sqlite` (Core Data + protobuf body) is out of scope.
 
 When extending the public surface, mirror the existing conventions: `Sendable` on every public type, `LocalizedError` on error enums (so consumers get a usable `errorDescription`), and `Hashable`/`Identifiable` on value types where the conformance is semantically free.

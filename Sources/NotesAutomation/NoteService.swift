@@ -48,12 +48,12 @@ extension NoteServiceError: LocalizedError {
 ///
 /// ## Scope
 ///
-/// The service exposes only the subset of Notes.app's AppleScript surface
-/// that maps cleanly to a flat list of notes: ``list(limit:)``,
-/// ``search(query:limit:)``, and ``create(title:body:folder:)``. Folder
-/// structure is represented only by the `folder` string on each ``Note``;
-/// there is no separate folder model. Update and delete are intentionally
-/// omitted — contributions welcome.
+/// The service exposes the subset of Notes.app's AppleScript surface that
+/// maps cleanly to a flat list of notes: ``list(limit:)``,
+/// ``search(query:limit:)``, ``create(title:body:folder:)``, and
+/// ``delete(id:)``. Folder structure is represented only by the `folder`
+/// string on each ``Note``; there is no separate folder model. Update is
+/// intentionally omitted — contributions welcome.
 ///
 /// ## Concurrency
 ///
@@ -167,7 +167,46 @@ public struct NoteService: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    // MARK: - Delete
+
+    /// Permanently deletes a note by id. The id format matches what
+    /// ``list(limit:)``, ``search(query:limit:)``, and ``create(title:body:folder:)``
+    /// return (Notes.app's Core Data URI, e.g. `x-coredata://…/ICNote/p42`).
+    ///
+    /// - Parameter id: The note's opaque id. Empty or whitespace-only ids
+    ///   throw ``NoteServiceError/invalidInput(_:)`` without running any
+    ///   AppleScript.
+    /// - Throws:
+    ///   - ``NoteServiceError/invalidInput(_:)`` when `id` is empty.
+    ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running,
+    ///     Automation permission is denied, or no note with that id exists.
+    public func delete(id: String) async throws {
+        guard !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+            throw NoteServiceError.invalidInput("id is required")
+        }
+        _ = try await runner.run(source: Self.deleteScript(id: id))
+    }
+
     // MARK: - Script generation
+
+    /// Constructs a delete-by-id AppleScript.
+    ///
+    /// Looks up the note via `note id "…"`, which references Notes.app's
+    /// Core Data URI. If the note doesn't exist, AppleScript raises at
+    /// runtime — callers surface that as ``AppleScriptError/runtime(_:)``.
+    ///
+    /// - Parameter id: The note's opaque id. Double-quotes are escaped
+    ///   defensively before interpolation.
+    /// - Returns: AppleScript source.
+    static func deleteScript(id: String) -> String {
+        let esc = id.replacingOccurrences(of: "\"", with: "\\\"")
+        return """
+        tell application "Notes"
+            delete note id "\(esc)"
+        end tell
+        """
+    }
+
 
     /// Constructs a list-or-search AppleScript.
     ///
