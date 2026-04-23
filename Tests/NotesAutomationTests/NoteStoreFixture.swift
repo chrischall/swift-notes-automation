@@ -41,6 +41,7 @@ enum NoteStoreFixture {
             ZTITLE2 VARCHAR,
             ZSNIPPET VARCHAR,
             ZFOLDER INTEGER,
+            ZFOLDERTYPE INTEGER,
             ZMARKEDFORDELETION INTEGER,
             ZMODIFICATIONDATE1 REAL,
             ZCREATIONDATE1 REAL
@@ -62,6 +63,19 @@ enum NoteStoreFixture {
     struct SeedFolder {
         let pk: Int
         let title: String
+        /// `1` = Recently Deleted (Notes.app trash); `0` = regular folder.
+        /// Matches the values observed in real NoteStore.sqlite.
+        let folderType: Int
+        /// Used as an additional trash marker via the `TrashFolder-*`
+        /// naming convention.
+        let identifier: String?
+
+        init(pk: Int, title: String, folderType: Int = 0, identifier: String? = nil) {
+            self.pk = pk
+            self.title = title
+            self.folderType = folderType
+            self.identifier = identifier
+        }
     }
 
     /// Writes a tmp .sqlite file with schema + seeds. Deleting the file
@@ -91,9 +105,11 @@ enum NoteStoreFixture {
         }
 
         for f in folders {
+            let idVal = f.identifier.map { "'\(escape($0))'" } ?? "NULL"
             let sql = """
                 INSERT INTO ZICCLOUDSYNCINGOBJECT
-                (Z_PK, Z_ENT, ZTITLE2) VALUES (\(f.pk), 2, '\(escape(f.title))');
+                (Z_PK, Z_ENT, ZTITLE2, ZFOLDERTYPE, ZIDENTIFIER)
+                VALUES (\(f.pk), 2, '\(escape(f.title))', \(f.folderType), \(idVal));
                 """
             try exec(db, sql)
         }
@@ -120,6 +136,10 @@ enum NoteStoreFixture {
     static let defaultFolders: [SeedFolder] = [
         .init(pk: 100, title: "Notes"),
         .init(pk: 101, title: "Work"),
+        // Mirrors the real Notes schema: ZFOLDERTYPE=1 marks the trash;
+        // ZIDENTIFIER='TrashFolder-*' is the locale-independent fallback.
+        .init(pk: 102, title: "Recently Deleted",
+              folderType: 1, identifier: "TrashFolder-CloudKit"),
     ]
 
     static let defaultNotes: [SeedNote] = [
@@ -139,6 +159,13 @@ enum NoteStoreFixture {
               snippet: "Recipe for chocolate cookies",
               folderPK: 100, markedForDeletion: false,
               modificationDate: 3000),
+        // Note logically deleted via Notes.app — moved to the trash
+        // folder but ZMARKEDFORDELETION stays 0 (matches real-world
+        // AppleScript-delete behavior we observed in Apple Notes).
+        .init(pk: 6, identifier: "UUID-F", title: "Trashed thoughts",
+              snippet: "Deleted note still in DB",
+              folderPK: 102, markedForDeletion: false,
+              modificationDate: 2500),
     ]
 
     // MARK: - Internals

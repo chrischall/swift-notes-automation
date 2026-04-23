@@ -68,6 +68,52 @@ struct NoteStoreReaderTests {
         }
     }
 
+    @Test("list excludes notes in the Recently Deleted folder (ZFOLDERTYPE=1)")
+    func listExcludesTrashByFolderType() async throws {
+        try await withFixture { reader in
+            let notes = try await reader.list(limit: 20)
+            // "Trashed thoughts" (pk 6) is in the fixture's trash folder
+            // (ZFOLDERTYPE=1). The user-visible list must not include it,
+            // even though its ZMARKEDFORDELETION stays 0 — real Notes.app
+            // behavior when deleting via AppleScript.
+            #expect(!notes.contains { $0.title == "Trashed thoughts" })
+        }
+    }
+
+    @Test("list excludes trash by ZIDENTIFIER prefix even if ZFOLDERTYPE is missing")
+    func listExcludesTrashByIdentifier() async throws {
+        // Belt-and-suspenders: for accounts where Notes doesn't populate
+        // ZFOLDERTYPE (older schemas), the TrashFolder-* identifier
+        // naming must still catch the folder.
+        let folders: [NoteStoreFixture.SeedFolder] = [
+            .init(pk: 100, title: "Notes"),
+            .init(pk: 102, title: "Trash", folderType: 0,
+                  identifier: "TrashFolder-LocalAccount"),
+        ]
+        let notes: [NoteStoreFixture.SeedNote] = [
+            .init(pk: 1, identifier: "UUID-A", title: "Visible",
+                  snippet: "", folderPK: 100, markedForDeletion: false,
+                  modificationDate: 2000),
+            .init(pk: 2, identifier: "UUID-B", title: "Hidden",
+                  snippet: "", folderPK: 102, markedForDeletion: false,
+                  modificationDate: 1000),
+        ]
+        try await withFixture(folders: folders, notes: notes) { reader in
+            let results = try await reader.list(limit: 10)
+            #expect(results.map(\.title) == ["Visible"])
+        }
+    }
+
+    @Test("search also excludes notes in the trash folder")
+    func searchExcludesTrash() async throws {
+        try await withFixture { reader in
+            // "Trashed thoughts" would match the substring "thoughts",
+            // but it's in the trash folder — must not surface.
+            let results = try await reader.search(query: "thoughts")
+            #expect(results.isEmpty)
+        }
+    }
+
     // MARK: - search
 
     @Test("search matches against title case-insensitively")

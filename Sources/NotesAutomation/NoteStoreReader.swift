@@ -73,7 +73,17 @@ public actor NoteStoreReader {
     private nonisolated(unsafe) let db: OpaquePointer
     private let storeUUID: String?
 
-    /// Opens the Notes database at `path` in read-only mode.
+    /// Opens the Notes database at `path` for querying.
+    ///
+    /// Opens read-write + `PRAGMA query_only = 1` rather than
+    /// `SQLITE_OPEN_READONLY`. Counterintuitive, but read-only + WAL is a
+    /// known footgun: a read-only handle can't write the `-shm` file that
+    /// coordinates WAL snapshots, so readers get stuck on whichever
+    /// snapshot was current at open time. Read-write + `query_only = 1`
+    /// gives normal WAL refresh semantics (reader sees Notes.app's latest
+    /// commits) while SQLite still rejects any accidental write. Notes.app
+    /// running concurrently is fine — WAL supports concurrent readers +
+    /// a single writer.
     ///
     /// - Parameter path: Absolute path to `NoteStore.sqlite`. Defaults to
     ///   ``defaultDatabasePath``. Tests pass a fixture path here.
@@ -81,7 +91,7 @@ public actor NoteStoreReader {
     ///   the file doesn't exist or the caller lacks permission.
     public init(path: String = NoteStoreReader.defaultDatabasePath) throws {
         var handle: OpaquePointer?
-        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX
+        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX
         let rc = sqlite3_open_v2(path, &handle, flags, nil)
         guard rc == SQLITE_OK, let handle else {
             let msg = handle.map { String(cString: sqlite3_errmsg($0)) }
@@ -93,6 +103,12 @@ public actor NoteStoreReader {
                 "Privacy & Security → Full Disk Access."
             )
         }
+        // Pin the connection as query-only so any programming mistake
+        // downstream gets rejected by SQLite rather than corrupting
+        // Notes.app's state. Intentionally swallowing the pragma's rc —
+        // if it somehow fails, the worst case is our own code could
+        // write, which it never does.
+        sqlite3_exec(handle, "PRAGMA query_only = 1", nil, nil, nil)
         self.db = handle
         // Capture the Core Data store UUID once so we can mint
         // `x-coredata://…` ids compatible with NoteService (which returns
@@ -140,6 +156,16 @@ public actor NoteStoreReader {
     /// to note entities (`ICNote`). Left-joins the same table to resolve
     /// the folder name — notes without a folder show up with an empty
     /// folder string.
+    ///
+    /// Exclusion filters match how Notes.app represents deleted notes:
+    /// - `ZMARKEDFORDELETION = 0` — canonical soft-delete flag. Notes.app
+    ///   sets this on some deletions but not all.
+    /// - `ZFOLDERTYPE <> 1` and `ZIDENTIFIER NOT LIKE 'TrashFolder-%'` —
+    ///   excludes notes in the Recently Deleted folder, which is how
+    ///   Notes.app moves delete-via-AppleScript notes. `ZFOLDERTYPE = 1`
+    ///   is the stable, locale-independent marker; the `TrashFolder-*`
+    ///   identifier is a belt-and-suspenders check for accounts where
+    ///   `ZFOLDERTYPE` isn't set.
     static let baseQuery = """
         SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZSNIPPET,
                COALESCE(f.ZTITLE2, '') AS folder_name
@@ -147,6 +173,8 @@ public actor NoteStoreReader {
         JOIN Z_PRIMARYKEY pk ON n.Z_ENT = pk.Z_ENT AND pk.Z_NAME = 'ICNote'
         LEFT JOIN ZICCLOUDSYNCINGOBJECT f ON n.ZFOLDER = f.Z_PK
         WHERE COALESCE(n.ZMARKEDFORDELETION, 0) = 0
+          AND COALESCE(f.ZFOLDERTYPE, 0) <> 1
+          AND COALESCE(f.ZIDENTIFIER, '') NOT LIKE 'TrashFolder-%'
         """
 
     private func runNoteQuery(
