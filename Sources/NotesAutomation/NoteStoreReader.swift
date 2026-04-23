@@ -66,30 +66,47 @@ public actor NoteStoreReader {
         return "\(home)/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"
     }
 
-    // nonisolated(unsafe): OpaquePointer isn't Sendable but the handle is
-    // accessed only inside the actor's isolation domain (reads are
-    // serialized through the actor) and from the nonisolated deinit, which
-    // runs after the last reference is gone — no concurrent access.
-    private nonisolated(unsafe) let db: OpaquePointer
+    private let path: String
     private let storeUUID: String?
 
     /// Opens the Notes database at `path` for querying.
     ///
-    /// Opens read-write + `PRAGMA query_only = 1` rather than
-    /// `SQLITE_OPEN_READONLY`. Counterintuitive, but read-only + WAL is a
-    /// known footgun: a read-only handle can't write the `-shm` file that
-    /// coordinates WAL snapshots, so readers get stuck on whichever
-    /// snapshot was current at open time. Read-write + `query_only = 1`
-    /// gives normal WAL refresh semantics (reader sees Notes.app's latest
-    /// commits) while SQLite still rejects any accidental write. Notes.app
-    /// running concurrently is fine — WAL supports concurrent readers +
-    /// a single writer.
+    /// Each query opens and closes its own SQLite handle. Counterintuitive
+    /// but necessary: Notes.app commits writes via WAL while our reader is
+    /// running, and a long-lived handle holds a read-snapshot that doesn't
+    /// refresh reliably even with `SQLITE_OPEN_READWRITE` + `PRAGMA
+    /// query_only = 1` (reads stay on the snapshot current at the last
+    /// refresh, so AppleScript-committed deletes don't show up until the
+    /// next reader restart). Opening fresh per query costs ~1ms and
+    /// guarantees the read sees Notes.app's latest commits.
+    ///
+    /// `init` opens the DB once eagerly to verify access + cache the
+    /// Core Data store UUID. The handle is closed before init returns —
+    /// queries open their own handles on demand.
     ///
     /// - Parameter path: Absolute path to `NoteStore.sqlite`. Defaults to
     ///   ``defaultDatabasePath``. Tests pass a fixture path here.
     /// - Throws: ``NoteStoreReaderError/databaseNotAccessible(_:)`` when
     ///   the file doesn't exist or the caller lacks permission.
     public init(path: String = NoteStoreReader.defaultDatabasePath) throws {
+        self.path = path
+        let handle = try Self.openHandle(path: path)
+        defer { sqlite3_close_v2(handle) }
+        // Capture the Core Data store UUID once so we can mint
+        // `x-coredata://…` ids compatible with NoteService (which returns
+        // this format from AppleScript). Best-effort — if the column
+        // isn't there we fall back to ZIDENTIFIER.
+        self.storeUUID = Self.readStoreUUID(db: handle)
+    }
+
+    /// Opens a fresh SQLite handle for one query. Callers must `sqlite3_close_v2`
+    /// it when done — `defer` next to the call site is the idiomatic spot.
+    ///
+    /// Opens read-write + `PRAGMA query_only = 1` (not `SQLITE_OPEN_READONLY`)
+    /// because read-only + WAL can't write the `-shm` file that coordinates
+    /// snapshot refresh. Read-write + `query_only = 1` gets WAL refresh
+    /// semantics while SQLite still rejects accidental writes.
+    private static func openHandle(path: String) throws -> OpaquePointer {
         var handle: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX
         let rc = sqlite3_open_v2(path, &handle, flags, nil)
@@ -103,22 +120,8 @@ public actor NoteStoreReader {
                 "Privacy & Security → Full Disk Access."
             )
         }
-        // Pin the connection as query-only so any programming mistake
-        // downstream gets rejected by SQLite rather than corrupting
-        // Notes.app's state. Intentionally swallowing the pragma's rc —
-        // if it somehow fails, the worst case is our own code could
-        // write, which it never does.
         sqlite3_exec(handle, "PRAGMA query_only = 1", nil, nil, nil)
-        self.db = handle
-        // Capture the Core Data store UUID once so we can mint
-        // `x-coredata://…` ids compatible with NoteService (which returns
-        // this format from AppleScript). Best-effort — if the column
-        // isn't there we fall back to ZIDENTIFIER.
-        self.storeUUID = Self.readStoreUUID(db: handle)
-    }
-
-    deinit {
-        sqlite3_close_v2(db)
+        return handle
     }
 
     // MARK: - Public queries
@@ -182,6 +185,10 @@ public actor NoteStoreReader {
         args: [String],
         limit: Int
     ) throws -> [Note] {
+        // Fresh handle per query — see `openHandle` doc for why.
+        let db = try Self.openHandle(path: path)
+        defer { sqlite3_close_v2(db) }
+
         let sql = Self.baseQuery + "\n" + extraPredicate +
             "\nORDER BY n.ZMODIFICATIONDATE1 DESC\nLIMIT ?"
 

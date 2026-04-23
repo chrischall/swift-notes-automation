@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 @testable import NotesAutomation
 
@@ -112,6 +113,44 @@ struct NoteStoreReaderTests {
             let results = try await reader.search(query: "thoughts")
             #expect(results.isEmpty)
         }
+    }
+
+    @Test("reader sees mutations committed between queries (no stale snapshot)")
+    func readerRefreshesAcrossQueries() async throws {
+        // Regression test: the real bug we hit against Apple Notes was
+        // that Notes.app's delete commit (ZMARKEDFORDELETION=1, ZFOLDER
+        // moved to the trash folder) wasn't visible to a long-lived
+        // reader — it held a WAL snapshot from open time. Fix: fresh
+        // SQLite handle per query.
+        //
+        // We reproduce by opening a reader, running one query, mutating
+        // the DB directly via a second raw sqlite connection (simulating
+        // Notes.app's writes), and then running the same query on the
+        // original reader. The second result must reflect the change.
+        let path = try NoteStoreFixture.create()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let reader = try NoteStoreReader(path: path)
+
+        let before = try await reader.list(limit: 20)
+        #expect(before.contains { $0.title == "Shopping list" })
+
+        // Independently mutate the fixture: mark "Shopping list" (pk 1)
+        // for deletion. Use a separate connection so we're truly testing
+        // cross-connection freshness, the same shape Notes.app has.
+        var mutator: OpaquePointer?
+        #expect(sqlite3_open(path, &mutator) == SQLITE_OK)
+        defer { if let m = mutator { sqlite3_close_v2(m) } }
+        let execRC = sqlite3_exec(
+            mutator,
+            "UPDATE ZICCLOUDSYNCINGOBJECT SET ZMARKEDFORDELETION = 1 WHERE Z_PK = 1",
+            nil,
+            nil,
+            nil as UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+        )
+        #expect(execRC == SQLITE_OK)
+
+        let after = try await reader.list(limit: 20)
+        #expect(!after.contains { $0.title == "Shopping list" })
     }
 
     // MARK: - search
