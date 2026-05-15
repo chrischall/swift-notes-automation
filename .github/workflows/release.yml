@@ -1,8 +1,9 @@
 name: Release
 
-# Fires on any v* tag push. Validates the tag matches VERSION, builds a
-# release + runs tests on macOS, generates a DocC archive, and creates a
-# GitHub Release with auto-generated notes plus the DocC zip attached.
+# Fires on any v* tag push. Validates the tag matches VERSION, generates
+# a DocC archive, and creates a GitHub Release with auto-generated notes
+# plus the DocC zip attached. CI runs in tag-and-bump before the tag is
+# created, so it's not repeated here.
 
 on:
   push:
@@ -28,9 +29,6 @@ jobs:
             exit 1
           fi
           echo "VERSION=${FILE}" >> "$GITHUB_ENV"
-
-      - run: swift build -c release
-      - run: swift test
 
       - name: Build DocC archive
         continue-on-error: true
