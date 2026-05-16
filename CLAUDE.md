@@ -69,3 +69,27 @@ This split means `NoteService`'s logic — script generation, output parsing, in
 The README lists capabilities deliberately omitted (update, rich HTML, attachments, iCloud state). Notes.app's AppleScript dictionary supports update — the natural extension is to add `update(id:...)` following the same script-generation + fake-runner test pattern used by `delete(id:)`. Anything requiring direct parsing of `NoteStore.sqlite` (Core Data + protobuf body) is out of scope.
 
 When extending the public surface, mirror the existing conventions: `Sendable` on every public type, `LocalizedError` on error enums (so consumers get a usable `errorDescription`), and `Hashable`/`Identifiable` on value types where the conformance is semantically free.
+
+<!-- pr-workflow:v1 -->
+## Pull requests & release notes
+
+**Default workflow: branch + PR, even for solo work.** Direct pushes to `main` skip review *and* skip auto-generated release notes — GitHub's `generate_release_notes` (configured in `.github/release.yml`) only picks up merged PRs. Push directly to `main` only when the user explicitly asks for it (e.g. emergency hotfix).
+
+For every PR, apply exactly one label so it lands in the right release-notes section:
+
+| Label                | Section in release notes |
+|----------------------|--------------------------|
+| `enhancement`        | Features                 |
+| `bug`                | Bug Fixes                |
+| `security`           | Security                 |
+| `refactor`           | Refactor                 |
+| `documentation`      | Documentation            |
+| `test`               | Tests                    |
+| `dependencies`       | Dependencies             |
+| `ci` / `github_actions` | CI & Build            |
+| *(none / unmatched)* | Other Changes            |
+| `ignore-for-release` | Hidden from notes        |
+
+The **PR title** becomes the bullet — write it like a user-facing changelog entry, not internal shorthand. Conventional-commit prefixes are still fine in commit messages, but the PR title should read clean.
+
+Open with `gh pr create --label <label>` (or `--label ignore-for-release` for chores not worth a line), then **immediately** run `gh pr merge <num> --auto --merge` so the PR merges as soon as CI passes. The repo allows merge commits only (no squash, no rebase) — don't pass `--squash`/`--rebase` or the call will fail.
