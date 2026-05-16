@@ -52,7 +52,7 @@ This split means `NoteService`'s logic — script generation, output parsing, in
 
 ### Non-obvious AppleScript quirks to respect
 
-1. **`whose` clauses return specifiers, not references.** Iterating `repeat with n in (notes whose name contains "x")` and then accessing `container of n` fails with `Can't get name of container of item N of every note whose …`. The code works around this by materializing the filter result into a variable first (`set matchedNotes to (every note whose …)`) and indexing (`item i of matchedNotes`) to get a concrete reference. Keep this pattern if you add new list-ish queries — the comment at `NoteService.swift:112` explains it.
+1. **`whose` clauses return specifiers, not references.** Iterating `repeat with n in (notes whose name contains "x")` and then accessing `container of n` fails with `Can't get name of container of item N of every note whose …`. The code works around this by materializing the filter result into a variable first (`set matchedNotes to (every note whose …)`) and indexing (`item i of matchedNotes`) to get a concrete reference. Keep this pattern if you add new list-ish queries — see the `> Note:` doc-comment block on `listOrSearchScript` in `Sources/NotesAutomation/NoteService.swift`.
 2. **Any string interpolated into AppleScript source must have `"` escaped.** `NoteService` does this inline (the local `esc` closure in `create`, the `replacingOccurrences` call in `listOrSearchScript`). If you add another script generator, do the same — there's no central escaping helper.
 3. **Create wraps the body as HTML-ish** with the title as `<h1>`. Notes.app treats body as HTML; plaintext in means plaintext out when read back via `plaintext of note`.
 4. **Snippet truncation + tab/newline stripping is done in AppleScript, not Swift.** The generated script's `oneLine` handler shells out to `tr` so the Swift-side parser can rely on a clean `id\ttitle\tfolder\tsnippet\n` line format. `parseNoteLines` silently skips lines with fewer than 4 fields — AppleScript can emit a blank row if a single note fails to read (e.g. locked note).
@@ -90,6 +90,6 @@ For every PR, apply exactly one label so it lands in the right release-notes sec
 | *(none / unmatched)* | Other Changes            |
 | `ignore-for-release` | Hidden from notes        |
 
-The **PR title** becomes the bullet — write it like a user-facing changelog entry, not internal shorthand. Conventional-commit prefixes are still fine in commit messages, but the PR title should read clean.
+The **PR title** becomes the bullet — write it like a user-facing changelog entry (`ck_set_session: refuse stale refresh tokens`), not internal shorthand (`auth tweaks`). Conventional-commit prefixes (`feat:`, `fix:`, `chore:`) are still fine in commit messages, but the PR title should read clean.
 
 Open with `gh pr create --label <label>` (or `--label ignore-for-release` for chores not worth a line), then **immediately** run `gh pr merge <num> --auto --merge` so the PR merges as soon as CI passes. The repo allows merge commits only (no squash, no rebase) — don't pass `--squash`/`--rebase` or the call will fail.
