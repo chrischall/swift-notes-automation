@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/chrischall/swift-notes-automation/compare/v1.2.0...v1.2.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* **ci:** auto-merge arm guards ([#19](https://github.com/chrischall/swift-notes-automation/issues/19)) ([83fd35d](https://github.com/chrischall/swift-notes-automation/commit/83fd35d36b722eaa18ee0e91f2a9c4966669cd96))
+* **ci:** switch auto-merge to squash and label-gated design ([#14](https://github.com/chrischall/swift-notes-automation/issues/14)) ([fb2d222](https://github.com/chrischall/swift-notes-automation/commit/fb2d222603bb9e7fcc24d26c9c4aa02bbf44f7c7))
+
 ## [1.2.0](https://github.com/chrischall/swift-notes-automation/compare/v1.1.3...v1.2.0) (2026-05-25)
 
 
