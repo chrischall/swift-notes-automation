@@ -3,6 +3,7 @@
 [![CI](https://github.com/chrischall/swift-notes-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/chrischall/swift-notes-automation/actions/workflows/ci.yml)
 [![Swift](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fchrischall%2Fswift-notes-automation%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/chrischall/swift-notes-automation)
 [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fchrischall%2Fswift-notes-automation%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/chrischall/swift-notes-automation)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Swift library for driving Apple Notes.app on macOS. Two complementary
 access paths:
