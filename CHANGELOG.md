@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/chrischall/swift-notes-automation/compare/v1.2.1...v1.2.2) (2026-06-13)
+
+
+### Documentation
+
+* add license badge to README ([#21](https://github.com/chrischall/swift-notes-automation/issues/21)) ([8863d17](https://github.com/chrischall/swift-notes-automation/commit/8863d17247026c4b98ced9f0876f30fad95c0f6f))
+
 ## [1.2.1](https://github.com/chrischall/swift-notes-automation/compare/v1.2.0...v1.2.1) (2026-05-29)
 
 
