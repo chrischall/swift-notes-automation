@@ -28,7 +28,7 @@ NOTES_SQLITE_INTEGRATION=1 swift test                  # also run NoteStoreReade
   - `NSAppleScriptRunnerTests` (`NOTES_AUTOMATION_INTEGRATION=1`) — exercises the real `NSAppleScript` bridge with trivial scripts (no permission needed). Opt-in because the bridge misbehaves inside xctest bundles on recent macOS — see the AppleScript quirks section below.
   - `NoteStoreReaderIntegrationTests` (`NOTES_SQLITE_INTEGRATION=1`) — exercises the real `NoteStore.sqlite`. Requires **Full Disk Access** for the test binary.
 - Without the env var, every test in those suites is skipped via a `.disabled(if:)` trait, so CI stays deterministic and permission-prompt-free.
-- Release: push a `vX.Y.Z` tag. `.github/workflows/release.yml` validates it on `macos-15` (release build + `swift test`) and publishes a GitHub Release with auto-generated notes.
+- Release is **release-please**-driven, not tag-driven: merging Conventional-Commit PRs to `main` makes `.github/workflows/release-please.yml` open/update a release PR; merging that PR cuts the `vX.Y.Z` tag + GitHub Release. See *Pull requests & release notes* below. CI (`.github/workflows/ci.yml`, `macos-15`) runs `swift build` + `swift test` as the final merge gate.
 
 ## Architecture
 
@@ -92,4 +92,17 @@ For every PR, apply exactly one label so it lands in the right release-notes sec
 
 The **PR title MUST be a Conventional Commit**, written user-facing (`fix(scope): …`, `feat(scope): …`), not internal shorthand. Because the repo squash-merges, the PR title *becomes the squash commit's subject line* — the only thing release-please parses to pick the version bump and changelog section. Only `feat` (minor), `fix` (patch), and `!`/`BREAKING CHANGE` (major) cut a release; `perf`/`refactor`/`docs` show in the changelog without bumping; `ci`/`test`/`build`/`chore` are recognised but hidden (see `release-please-config.json` → `changelog-sections`). A title without a conventional type is invisible to release-please — no bump, no changelog line. Prefixes in *individual commits* don't help; squash keeps only the title.
 
-Open with `gh pr create --label <label>` (or `--label ignore-for-release` for chores not worth a line). **Don't run `gh pr merge` yourself** — leave merging to the user. The repo is **squash-only** (no merge commit, no rebase), so don't pass `--merge`/`--rebase`.
+Open with `gh pr create --label <label>` (or `--label ignore-for-release` for chores not worth a line). **Don't run `gh pr merge` yourself** — the `chrischall/workflows` pipeline does it: `pr-auto-review.yml` reviews every non-release PR, and on a `pass` or `warn` verdict it arms `ready-to-merge`; `auto-merge.yml` then squash-merges the moment CI is green. A `fail` verdict blocks until the findings are addressed. The repo is **squash-only** (no merge commit, no rebase), so don't pass `--merge`/`--rebase`. The release-please PR is skipped by auto-review — ship it by adding `release-ready` yourself.
+
+### Auto-review follow-up issues
+
+When a PR's auto-review verdict is `warn` or `fail`, the `chrischall/workflows` pipeline opens or updates a single `auto-review-followup` issue ("Auto-review follow-ups for PR #N") whose checklist captures every finding, and links it from the PR's `<!-- auto-review-verdict -->` comment (`📋 Tracking follow-ups: #N`). `warn` (nits only) still auto-merges — the issue carries the nits forward, so most nits are fixed in a *later* PR; `fail` blocks until the important findings are addressed on the PR itself.
+
+When asked to address the auto-review comments / review findings on a PR:
+
+1. Read the verdict comment, open the linked `auto-review-followup` issue, and treat its checklist as the work list (alongside any inline review comments).
+2. Resolve each item, checking off only what you've **verified** is genuinely fixed.
+3. If every item is resolved on the current PR, add `Closes #<issue>` to that PR's body so the merge closes it; if some are deferred, check off only the resolved ones and leave the issue open.
+4. For nits whose `warn` PR already auto-merged, address them in a follow-up PR that references `Closes #<issue>`.
+
+(Mirrors the fleet-wide convention in `~/.claude/CLAUDE.md`.)
