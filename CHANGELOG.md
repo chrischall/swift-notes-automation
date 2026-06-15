@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.3](https://github.com/chrischall/swift-notes-automation/compare/v1.2.2...v1.2.3) (2026-06-15)
+
+
+### Documentation
+
+* correct release flow and add auto-review follow-up convention ([#29](https://github.com/chrischall/swift-notes-automation/issues/29)) ([d5b3a61](https://github.com/chrischall/swift-notes-automation/commit/d5b3a610bd121daf3a877a19f85ed8990bdaa319))
+* require Conventional Commit PR titles; correct squash-merge guidance ([#27](https://github.com/chrischall/swift-notes-automation/issues/27)) ([0727e4b](https://github.com/chrischall/swift-notes-automation/commit/0727e4b9c87e1a578d7cd4d2cb5391d33a5ede09))
+
 ## [1.2.2](https://github.com/chrischall/swift-notes-automation/compare/v1.2.1...v1.2.2) (2026-06-13)
 
 
