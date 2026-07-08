@@ -120,7 +120,19 @@ public actor NoteStoreReader {
                 "Privacy & Security → Full Disk Access."
             )
         }
-        sqlite3_exec(handle, "PRAGMA query_only = 1", nil, nil, nil)
+        // Enforce read-only at the connection level. This is the guardrail
+        // that keeps a READWRITE handle from ever mutating the store, so a
+        // failure here must not be swallowed — an unchecked failure would
+        // leave a silently-writable handle.
+        let pragmaRC = sqlite3_exec(handle, "PRAGMA query_only = 1", nil, nil, nil)
+        guard pragmaRC == SQLITE_OK else {
+            let msg = String(cString: sqlite3_errmsg(handle))
+            sqlite3_close_v2(handle)
+            throw NoteStoreReaderError.databaseNotAccessible(
+                "Failed to set PRAGMA query_only on \(path): \(msg). Refusing " +
+                "to return a writable handle to the Notes store."
+            )
+        }
         return handle
     }
 

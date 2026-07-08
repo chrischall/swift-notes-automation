@@ -113,8 +113,10 @@ public struct NoteService: Sendable {
     /// Creates a new note with the given title and body.
     ///
     /// The body is wrapped in Notes.app's HTML-ish format with the title
-    /// as an `<h1>` so the UI shows a proper heading. Quotes in `title`,
-    /// `body`, and `folder` are escaped before they reach AppleScript.
+    /// as an `<h1>` so the UI shows a proper heading. Backslashes and quotes
+    /// in `title`, `body`, and `folder` are escaped (via
+    /// ``escapeForAppleScript(_:)``) before they reach AppleScript, so no
+    /// input can terminate the string literal early.
     ///
     /// - Parameters:
     ///   - title: Note name. Must be non-empty after trimming whitespace.
@@ -133,10 +135,10 @@ public struct NoteService: Sendable {
             throw NoteServiceError.invalidInput("title is required")
         }
         // Notes.app treats the body as HTML-ish; combining title + body so
-        // the UI renders a proper header. Only quotes need escaping for the
-        // AppleScript string literals — backslashes and angle brackets are
-        // passed through intentionally.
-        let esc: (String) -> String = { $0.replacingOccurrences(of: "\"", with: "\\\"") }
+        // the UI renders a proper header. Both title and body are escaped for
+        // the AppleScript string literals via ``escapeForAppleScript`` so a
+        // backslash or quote can't terminate the literal early (injection).
+        let esc = Self.escapeForAppleScript
         let noteBody = "<h1>\(esc(title))</h1>\n\(esc(body))"
 
         let folderClause: String
@@ -189,6 +191,20 @@ public struct NoteService: Sendable {
 
     // MARK: - Script generation
 
+    /// Escapes a string for safe interpolation inside a double-quoted
+    /// AppleScript string literal.
+    ///
+    /// Order matters: backslashes are doubled **first**, then double-quotes
+    /// are backslash-escaped. Escaping quotes only (or escaping in the wrong
+    /// order) leaves input like `\"` or a trailing `\` able to terminate the
+    /// literal early, so the remainder of the value is parsed as AppleScript
+    /// — an injection that reaches `do shell script`.
+    static func escapeForAppleScript(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
     /// Constructs a delete-by-id AppleScript.
     ///
     /// Looks up the note via `note id "…"`, which references Notes.app's
@@ -199,7 +215,7 @@ public struct NoteService: Sendable {
     ///   defensively before interpolation.
     /// - Returns: AppleScript source.
     static func deleteScript(id: String) -> String {
-        let esc = id.replacingOccurrences(of: "\"", with: "\\\"")
+        let esc = escapeForAppleScript(id)
         return """
         tell application "Notes"
             delete note id "\(esc)"
@@ -234,7 +250,7 @@ public struct NoteService: Sendable {
     static func listOrSearchScript(query: String?, limit: Int) -> String {
         let filter: String
         if let query, !query.isEmpty {
-            let esc = query.replacingOccurrences(of: "\"", with: "\\\"")
+            let esc = escapeForAppleScript(query)
             filter = "whose (name contains \"\(esc)\") or (body contains \"\(esc)\")"
         } else {
             filter = ""
