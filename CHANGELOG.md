@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.4](https://github.com/chrischall/swift-notes-automation/compare/v1.2.3...v1.2.4) (2026-07-08)
+
+
+### Bug Fixes
+
+* **security:** escape backslashes in AppleScript to prevent injection ([#31](https://github.com/chrischall/swift-notes-automation/issues/31)) ([390aba6](https://github.com/chrischall/swift-notes-automation/commit/390aba6d91fc69d9161a5eb9a0e5803f442fd1cf))
+
 ## [1.2.3](https://github.com/chrischall/swift-notes-automation/compare/v1.2.2...v1.2.3) (2026-06-15)
 
 
