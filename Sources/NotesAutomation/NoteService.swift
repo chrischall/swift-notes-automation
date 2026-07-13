@@ -77,6 +77,14 @@ public struct NoteService: Sendable {
         self.runner = runner
     }
 
+    /// Maximum length of the ``Note/snippet`` preview returned by
+    /// ``list(limit:offset:)`` and ``search(query:limit:offset:)``.
+    ///
+    /// A preview is meant to be scannable, not complete — use ``get(id:)``
+    /// for a note's full, untruncated body. Bumped from the original 200
+    /// so previews carry a bit more context without duplicating `get`.
+    public static let snippetPreviewMaxLength = 350
+
     // MARK: - List / search
 
     /// Returns the most-recently-modified notes, up to `limit`.
@@ -135,7 +143,7 @@ public struct NoteService: Sendable {
     /// the raw Notes.app HTML (``NoteDetail/html``), along with the title,
     /// folder, and creation/modification dates. This is the counterpart to
     /// ``list(limit:)`` / ``search(query:limit:)``, which return only a
-    /// ~200-character ``Note/snippet``.
+    /// truncated ``Note/snippet`` preview.
     ///
     /// - Parameter id: The note's opaque id, as returned by ``Note/id`` or
     ///   ``create(title:body:folder:)``. Empty or whitespace-only ids throw
@@ -551,7 +559,7 @@ public struct NoteService: Sendable {
                     set nid to id of n as string
                     set nname to name of n
                     set nbody to plaintext of n
-                    if (length of nbody) > 200 then set nbody to (text 1 thru 200 of nbody) & "..."
+                    if (length of nbody) > \(snippetPreviewMaxLength) then set nbody to (text 1 thru \(snippetPreviewMaxLength) of nbody) & "..."
                     set nfolder to ""
                     try
                         set nfolder to name of (container of n)
