@@ -142,23 +142,71 @@ public actor NoteStoreReader {
     ///
     /// Excludes notes marked for deletion. Results are ordered by
     /// modification date descending.
-    public func list(limit: Int = 20) async throws -> [Note] {
-        try runNoteQuery(where: "", args: [], limit: limit)
+    ///
+    /// - Parameters:
+    ///   - limit: Maximum number of notes to return.
+    ///   - offset: Number of leading notes to skip, for paging.
+    public func list(limit: Int = 20, offset: Int = 0) async throws -> [Note] {
+        try runNoteQuery(where: "", args: [], limit: limit, offset: offset)
     }
 
     /// Case-insensitive substring match against title and snippet.
     ///
     /// An empty or whitespace-only query returns `[]` without touching
     /// the DB — matches ``NoteService/search(query:limit:)``.
-    public func search(query: String, limit: Int = 20) async throws -> [Note] {
+    ///
+    /// - Parameters:
+    ///   - query: Substring to match against title and snippet.
+    ///   - limit: Maximum number of results.
+    ///   - offset: Number of leading matches to skip, for paging.
+    public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
         let needle = "%\(trimmed.lowercased())%"
         return try runNoteQuery(
             where: "AND (LOWER(n.ZTITLE1) LIKE ? OR LOWER(n.ZSNIPPET) LIKE ?)",
             args: [needle, needle],
-            limit: limit
+            limit: limit,
+            offset: offset
         )
+    }
+
+    // MARK: - Folders
+
+    /// Lists the names of all folders, excluding the Recently Deleted
+    /// (trash) folder. Enables folder browsing without going through
+    /// AppleScript.
+    ///
+    /// Ordered by name (case-insensitive). Duplicate names are possible
+    /// when two accounts each have a folder of the same name.
+    public func folders() async throws -> [String] {
+        let db = try Self.openHandle(path: path)
+        defer { sqlite3_close_v2(db) }
+
+        // Folders are the `ICFolder` entity. Same trash exclusion the note
+        // query uses: skip ZFOLDERTYPE = 1 and `TrashFolder-*` identifiers.
+        let sql = """
+            SELECT f.ZTITLE2
+            FROM ZICCLOUDSYNCINGOBJECT f
+            JOIN Z_PRIMARYKEY pk ON f.Z_ENT = pk.Z_ENT AND pk.Z_NAME = 'ICFolder'
+            WHERE COALESCE(f.ZFOLDERTYPE, 0) <> 1
+              AND COALESCE(f.ZIDENTIFIER, '') NOT LIKE 'TrashFolder-%'
+              AND f.ZTITLE2 IS NOT NULL
+            ORDER BY LOWER(f.ZTITLE2)
+            """
+        var stmt: OpaquePointer?
+        let rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
+        guard rc == SQLITE_OK, let stmt else {
+            let msg = String(cString: sqlite3_errmsg(db))
+            throw NoteStoreReaderError.sqliteError("prepare failed: \(msg)")
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        var results: [String] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let name = columnText(stmt, 0) { results.append(name) }
+        }
+        return results
     }
 
     // MARK: - Query core
@@ -195,14 +243,15 @@ public actor NoteStoreReader {
     private func runNoteQuery(
         where extraPredicate: String,
         args: [String],
-        limit: Int
+        limit: Int,
+        offset: Int = 0
     ) throws -> [Note] {
         // Fresh handle per query — see `openHandle` doc for why.
         let db = try Self.openHandle(path: path)
         defer { sqlite3_close_v2(db) }
 
         let sql = Self.baseQuery + "\n" + extraPredicate +
-            "\nORDER BY n.ZMODIFICATIONDATE1 DESC\nLIMIT ?"
+            "\nORDER BY n.ZMODIFICATIONDATE1 DESC\nLIMIT ? OFFSET ?"
 
         var stmt: OpaquePointer?
         let rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
@@ -219,6 +268,7 @@ public actor NoteStoreReader {
             sqlite3_bind_text(stmt, Int32(i + 1), s, -1, transient)
         }
         sqlite3_bind_int(stmt, Int32(args.count + 1), Int32(limit))
+        sqlite3_bind_int(stmt, Int32(args.count + 2), Int32(max(0, offset)))
 
         var results: [Note] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
