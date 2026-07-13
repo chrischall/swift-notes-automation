@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.5](https://github.com/chrischall/swift-notes-automation/compare/v1.2.4...v1.2.5) (2026-07-13)
+
+
+### Documentation
+
+* fix stale AppleScript-escaping docs after backslash fix ([#36](https://github.com/chrischall/swift-notes-automation/issues/36)) ([a5088fd](https://github.com/chrischall/swift-notes-automation/commit/a5088fd8efb2ff7486be5c0b6b0e1f7cf843d2bc))
+
 ## [1.2.4](https://github.com/chrischall/swift-notes-automation/compare/v1.2.3...v1.2.4) (2026-07-08)
 
 
