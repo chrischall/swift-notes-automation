@@ -211,8 +211,9 @@ public struct NoteService: Sendable {
     /// Core Data URI. If the note doesn't exist, AppleScript raises at
     /// runtime — callers surface that as ``AppleScriptError/runtime(_:)``.
     ///
-    /// - Parameter id: The note's opaque id. Double-quotes are escaped
-    ///   defensively before interpolation.
+    /// - Parameter id: The note's opaque id. Backslashes and double-quotes
+    ///   are escaped (via ``escapeForAppleScript(_:)``) defensively before
+    ///   interpolation.
     /// - Returns: AppleScript source.
     static func deleteScript(id: String) -> String {
         let esc = escapeForAppleScript(id)
