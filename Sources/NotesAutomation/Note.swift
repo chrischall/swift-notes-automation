@@ -25,7 +25,8 @@ public struct Note: Equatable, Hashable, Identifiable, Sendable {
     /// that appears at the top of the note and in Notes.app's sidebar.
     public let title: String
 
-    /// First ~200 characters of the note's body, tab- and newline-stripped.
+    /// Preview of the note body (up to `NoteService.snippetPreviewMaxLength`
+    /// characters), tab- and newline-stripped.
     ///
     /// Empty when the body could not be read (for example, a locked note).
     /// Use ``title`` as a fallback for display when this is empty.
@@ -43,7 +44,7 @@ public struct Note: Equatable, Hashable, Identifiable, Sendable {
     /// - Parameters:
     ///   - id: Opaque Notes.app identifier.
     ///   - title: Note title.
-    ///   - snippet: First ~200 characters of the body, whitespace-normalized.
+    ///   - snippet: Body preview, whitespace-normalized (see `NoteService.snippetPreviewMaxLength`).
     ///   - folder: Containing folder name, or `""` if unfiled.
     public init(id: String, title: String, snippet: String, folder: String) {
         self.id = id

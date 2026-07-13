@@ -8,12 +8,18 @@
 Swift library for driving Apple Notes.app on macOS. Two complementary
 access paths:
 
-- **`NoteService`** — AppleScript-backed. All CRUD (create, list,
-  search, delete). Goes through Notes.app → CloudKit, so writes sync
+- **`NoteService`** — AppleScript-backed. Full read/write surface:
+  `list`, `search`, `get` (untruncated body), `folders`, `create`,
+  `update`, `delete`. Goes through Notes.app → CloudKit, so writes sync
   to iCloud automatically.
 - **`NoteStoreReader`** — direct read-only SQLite access to
-  `NoteStore.sqlite`. Roughly 100× faster than AppleScript for list
-  and search. Requires Full Disk Access.
+  `NoteStore.sqlite`. Roughly 100× faster than AppleScript for list,
+  search, and folder enumeration. Requires Full Disk Access.
+
+`list`/`search` return a truncated `Note.snippet` for scannable results;
+`get(id:)` returns the note's **complete, untruncated** body as a
+`NoteDetail` — both plain text and HTML, plus creation/modification
+dates.
 
 Platform: **macOS 14+**. Pure Swift 6 with strict concurrency. Zero
 external dependencies (SQLite is via the system `SQLite3` module).
@@ -43,12 +49,27 @@ for note in recent {
 // Search — matches name OR body, case-insensitive
 let groceries = try await notes.search(query: "milk")
 
+// Page through a large library
+let page2 = try await notes.list(limit: 20, offset: 20)
+
+// Get — the note's COMPLETE body (never truncated), plain + HTML + dates
+let full = try await notes.get(id: recent[0].id)
+print(full.plainText)   // untruncated
+print(full.html)        // Notes.app rich HTML
+print(full.modificationDate as Any)
+
+// Folders — enumerate for browsing
+let folderNames = try await notes.folders()
+
 // Create — folder is auto-created if it doesn't exist
 let id = try await notes.create(
     title: "Weekly plan",
     body: "- Ship release\n- Review PRs",
     folder: "Work"
 )
+
+// Update — edit title/body and/or move to another folder in place
+try await notes.update(id: id, title: "Weekly plan (v2)", folder: "Archive")
 
 // Delete — permanent; bypasses the Recently Deleted folder
 try await notes.delete(id: id)
