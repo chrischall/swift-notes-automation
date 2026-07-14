@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/chrischall/swift-notes-automation/compare/v1.2.5...v1.3.0) (2026-07-13)
+
+
+### Features
+
+* add full-body get, update, folder listing, and pagination ([#38](https://github.com/chrischall/swift-notes-automation/issues/38)) ([0832139](https://github.com/chrischall/swift-notes-automation/commit/0832139910e44fc99a50107310da4b3bf3ca2358))
+
 ## [1.2.5](https://github.com/chrischall/swift-notes-automation/compare/v1.2.4...v1.2.5) (2026-07-13)
 
 
