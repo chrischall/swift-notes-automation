@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/chrischall/swift-notes-automation/compare/v1.3.0...v1.3.1) (2026-07-19)
+
+
+### Documentation
+
+* replace duplicated fleet policy with a pointer ([#40](https://github.com/chrischall/swift-notes-automation/issues/40)) ([978e0fb](https://github.com/chrischall/swift-notes-automation/commit/978e0fb44abe7853065f4a377fa9639896502ad9))
+
 ## [1.3.0](https://github.com/chrischall/swift-notes-automation/compare/v1.2.5...v1.3.0) (2026-07-13)
 
 
