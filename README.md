@@ -16,10 +16,13 @@ access paths:
   `NoteStore.sqlite`. Roughly 100× faster than AppleScript for list,
   search, and folder enumeration. Requires Full Disk Access.
 
-`list`/`search` return a truncated `Note.snippet` for scannable results;
-`get(id:)` returns the note's **complete, untruncated** body as a
-`NoteDetail` — both plain text and HTML, plus creation/modification
-dates.
+`list`/`search` return a truncated `Note.snippet` for scannable results
+— for search, the snippet is windowed around the first body match rather
+than blindly taken from the top; `get(id:)` returns the note's
+**complete, untruncated** body as a `NoteDetail` — both plain text and
+HTML, plus creation/modification dates. `bodyPage(_:offset:maxChars:)`
+and `matchExcerpt(query:in:maxLength:)` are pure helpers for paging a
+long body and re-anchoring a preview around a match.
 
 Platform: **macOS 14+**. Pure Swift 6 with strict concurrency. Zero
 external dependencies (SQLite is via the system `SQLite3` module).
@@ -121,7 +124,7 @@ Direct read-only SQLite reader. Methods are async and throw
 ```swift
 id: String        // opaque Notes.app id
 title: String     // name of note
-snippet: String   // ~200 chars of body
+snippet: String   // ~350-char preview (search: anchored at the match)
 folder: String    // containing folder name
 ```
 
