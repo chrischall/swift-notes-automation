@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/chrischall/swift-notes-automation/compare/v1.3.1...v1.4.0) (2026-07-30)
+
+
+### Features
+
+* match-anchored search snippets plus body paging and excerpt helpers ([#44](https://github.com/chrischall/swift-notes-automation/issues/44)) ([5645841](https://github.com/chrischall/swift-notes-automation/commit/5645841f75e357c996c18042f563c31e4f10434b))
+
 ## [1.3.1](https://github.com/chrischall/swift-notes-automation/compare/v1.3.0...v1.3.1) (2026-07-19)
 
 
