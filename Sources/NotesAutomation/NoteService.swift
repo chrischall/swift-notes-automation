@@ -311,6 +311,69 @@ public struct NoteService: Sendable {
         _ = try await runner.run(source: Self.deleteScript(id: id))
     }
 
+    // MARK: - Body windowing helpers
+
+    /// Cuts one `offset`/`maxChars` window out of a full note body.
+    ///
+    /// The counterpart to ``get(id:)`` for very long notes: fetch the full
+    /// ``NoteDetail/plainText`` once, then page it without re-running any
+    /// AppleScript. Counting is by `Character`, so emoji and combining
+    /// sequences never split mid-cluster.
+    ///
+    /// - Parameters:
+    ///   - body: The full body text.
+    ///   - offset: First character to include. Negative values clamp to 0;
+    ///     values past the end yield an empty ``NoteBodyPage/text`` with
+    ///     `start == end == total`.
+    ///   - maxChars: Window size, or `nil` for everything from `offset` on.
+    /// - Returns: The window plus the positions a caller needs to report
+    ///   truncation and page further.
+    public static func bodyPage(_ body: String, offset: Int, maxChars: Int?) -> NoteBodyPage {
+        let total = body.count
+        let start = min(max(0, offset), total)
+        let end = maxChars.map { min(total, start + max(0, $0)) } ?? total
+        let s = body.index(body.startIndex, offsetBy: start)
+        let e = body.index(body.startIndex, offsetBy: end)
+        return NoteBodyPage(text: String(body[s ..< e]), start: start, end: end, total: total)
+    }
+
+    /// A one-line preview window centered near the first case-insensitive
+    /// match of `query` in `body`.
+    ///
+    /// This is the Swift-side mirror of the generated search script's
+    /// `anchoredSnippet` handler, for callers that already hold a full body
+    /// (for example, re-anchoring a ``NoteStoreReader`` result after
+    /// fetching its body via ``get(id:)``). The match is placed about a
+    /// quarter of the way into the window so surrounding context shows on
+    /// both sides; tabs and newlines collapse to single spaces to match
+    /// ``Note/snippet`` formatting; `…` marks each clipped edge.
+    ///
+    /// - Parameters:
+    ///   - query: Text to look for, matched case-insensitively.
+    ///   - body: The full body to excerpt.
+    ///   - maxLength: Window size before the `…` markers. Defaults to
+    ///     ``snippetPreviewMaxLength``.
+    /// - Returns: The excerpt, or `nil` when `body` doesn't contain `query`
+    ///   — callers keep whatever preview they already had.
+    public static func matchExcerpt(
+        query: String, in body: String,
+        maxLength: Int = NoteService.snippetPreviewMaxLength
+    ) -> String? {
+        guard let match = body.range(of: query, options: [.caseInsensitive]) else { return nil }
+        let matchStart = body.distance(from: body.startIndex, to: match.lowerBound)
+        let start = max(0, matchStart - maxLength / 4)
+        let end = min(body.count, start + maxLength)
+        let s = body.index(body.startIndex, offsetBy: start)
+        let e = body.index(body.startIndex, offsetBy: end)
+        var text = String(body[s ..< e])
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        if start > 0 { text = "…" + text }
+        if end < body.count { text += "…" }
+        return text
+    }
+
     // MARK: - Script generation
 
     /// Escapes a string for safe interpolation inside a double-quoted
@@ -539,11 +602,37 @@ public struct NoteService: Sendable {
     ///   `<id>\t<title>\t<folder>\t<snippet>\n`.
     static func listOrSearchScript(query: String?, limit: Int, offset: Int = 0) -> String {
         let filter: String
+        let snippetClause: String
+        var anchorHandler = ""
         if let query, !query.isEmpty {
             let esc = escapeForAppleScript(query)
             filter = "whose (name contains \"\(esc)\") or (body contains \"\(esc)\")"
+            // A search hit deep in the body is useless behind a first-line
+            // preview — window the snippet around the first match instead.
+            // `offset of` ignores case by default, matching the `contains`
+            // filter above, and returns 0 for a title-only match, which the
+            // handler treats as "anchor at the top" (old behavior).
+            snippetClause = "set nbody to my anchoredSnippet(nbody, \"\(esc)\", \(snippetPreviewMaxLength))"
+            anchorHandler = """
+
+
+            on anchoredSnippet(s, q, maxLen)
+                if s is "" then return s
+                set matchPos to (offset of q in s)
+                if matchPos is 0 then set matchPos to 1
+                set winStart to matchPos - (maxLen div 4)
+                if winStart < 1 then set winStart to 1
+                set winEnd to winStart + maxLen - 1
+                if winEnd > (length of s) then set winEnd to (length of s)
+                set snip to text winStart thru winEnd of s
+                if winStart > 1 then set snip to "…" & snip
+                if winEnd < (length of s) then set snip to snip & "…"
+                return snip
+            end anchoredSnippet
+            """
         } else {
             filter = ""
+            snippetClause = "if (length of nbody) > \(snippetPreviewMaxLength) then set nbody to (text 1 thru \(snippetPreviewMaxLength) of nbody) & \"...\""
         }
         let start = max(0, offset) + 1
         return """
@@ -559,7 +648,7 @@ public struct NoteService: Sendable {
                     set nid to id of n as string
                     set nname to name of n
                     set nbody to plaintext of n
-                    if (length of nbody) > \(snippetPreviewMaxLength) then set nbody to (text 1 thru \(snippetPreviewMaxLength) of nbody) & "..."
+                    \(snippetClause)
                     set nfolder to ""
                     try
                         set nfolder to name of (container of n)
@@ -576,7 +665,7 @@ public struct NoteService: Sendable {
                 set s to do shell script "printf %s " & quoted form of s & " | tr '\\t\\n\\r' '   '"
             end try
             return s
-        end oneLine
+        end oneLine\(anchorHandler)
         """
     }
 
