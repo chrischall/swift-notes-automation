@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/chrischall/swift-notes-automation/compare/v1.4.0...v1.4.1) (2026-08-09)
+
+
+### Bug Fixes
+
+* run AppleScript on the main thread so cross-application scripts stop stalling ([#46](https://github.com/chrischall/swift-notes-automation/issues/46)) ([e8ea509](https://github.com/chrischall/swift-notes-automation/commit/e8ea5097dfc7c5c4752e03cf408a258d06708388))
+
 ## [1.4.0](https://github.com/chrischall/swift-notes-automation/compare/v1.3.1...v1.4.0) (2026-07-30)
 
 
