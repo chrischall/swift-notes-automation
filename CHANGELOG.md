@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/chrischall/swift-notes-automation/compare/v1.4.1...v1.4.2) (2026-08-09)
+
+
+### Documentation
+
+* correct the architecture note describing the AppleScript runner ([#50](https://github.com/chrischall/swift-notes-automation/issues/50)) ([6c4dda6](https://github.com/chrischall/swift-notes-automation/commit/6c4dda631b09af6e49400c2fa94a83c63df37f56))
+
 ## [1.4.1](https://github.com/chrischall/swift-notes-automation/compare/v1.4.0...v1.4.1) (2026-08-09)
 
 
