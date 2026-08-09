@@ -124,7 +124,15 @@ struct NSAppleScriptRunnerTests {
 /// Trivial scripts (`return "hello"`) send no Apple Event and so pass
 /// from any thread, which is why the opt-in suite above never caught
 /// this.
-@Suite("NSAppleScriptRunner thread affinity")
+///
+/// Carries `.serialized` per the repo's AppleScript convention. It is
+/// deliberately **not** gated on `NOTES_AUTOMATION_INTEGRATION`: the
+/// gate exists because the `NSAppleScript` bridge flakes with `-1751`
+/// inside xctest bundles, and these tests never reach the bridge — the
+/// closures they hop to the main thread are plain Swift. Gating them
+/// would remove the only CI-visible guard against the regression they
+/// exist to catch.
+@Suite("NSAppleScriptRunner thread affinity", .serialized)
 struct NSAppleScriptRunnerThreadAffinityTests {
     @Test("script execution is confined to the main thread")
     func executesOnMainThread() async {
