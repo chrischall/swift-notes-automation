@@ -41,7 +41,7 @@ Two-layer design so Notes-driving code can be unit-tested without a real Notes.a
 - **`AppleScriptRunner` protocol** (`Sources/NotesAutomation/AppleScriptRunner.swift`) — single async `run(source:) -> String` method. Production impl is `NSAppleScriptRunner`; tests use `FakeAppleScriptRunner` which queues string/error responses and records every call.
 - **`NoteService`** (`Sources/NotesAutomation/NoteService.swift`) — the public API (`list`, `search`, `create`, `delete`). It *generates* AppleScript source strings and hands them to an injected runner. The service itself is a value type with no mutable state.
 
-This split means `NoteService`'s logic — script generation, output parsing, input validation — is fully testable without AppleScript ever running. Only the `NSAppleScriptRunner` layer touches the system bridge, and it isolates the non-`Sendable` `NSAppleScript` object by compiling + executing inside `Task.detached`.
+This split means `NoteService`'s logic — script generation, output parsing, input validation — is fully testable without AppleScript ever running. Only the `NSAppleScriptRunner` layer touches the system bridge, and it isolates the non-`Sendable` `NSAppleScript` object by compiling + executing inside a hop to the **main thread** (`NSAppleScriptRunner.onMainThread(_:)`, backed by `MainActor.run`). That hop is load-bearing, not incidental: a `tell application` script waits for its Apple Event reply inside Carbon's `AEDefaultActiveProc`, which pumps only the main thread's event queue — where the reply is delivered. Run off the main thread it stalls (~32s on one measurement; no return before a 200s timeout on another) with no error and no timeout. Do not move this back to a `Task.detached`.
 
 ### SQLite path (reads only)
 
