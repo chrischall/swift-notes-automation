@@ -1,10 +1,47 @@
 name: release-please
 
+# Thin stub: release-please itself runs in chrischall/workflows'
+# reusable-release-please.yml (chrischall/workflows#283). What it replaces was
+# one of 18 drifted copies of the same file — this repo shared its variant with
+# swift-mail-automation and swift-photos-automation — so a fix to release
+# behaviour was an 81-repo sweep rather than one edit.
+#
+# THIS REPO HAS NO PUBLISH JOB, and that is not an omission. A Swift package is
+# consumed by SwiftPM straight from the git tag, so the tag and the GitHub
+# Release that release-please cuts ARE the release; there is no registry
+# artifact and nothing to upload afterwards. The `release-type: simple` in
+# release-please-config.json says the same thing from the other side.
+#
+# Which means the escape hatch the conversion exists for — `republish_tag`,
+# below — has nothing to re-fire HERE. It is declared and passed through anyway,
+# so the stub matches the fleet template and so a future publish job would need
+# no trigger change; its description says plainly that blank is the only useful
+# value in this repo. Read that as documentation, not as a control to reach for.
+#
+# What the call DOES buy this repo beyond ending the drift: the reusable
+# workflow amends a contributor credit ("thanks @user") into the release PR's
+# CHANGELOG and description on every run, which the copied file never did.
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      republish_tag:
+        # Fleet-wide this re-fires a publish job for a tag that ALREADY EXISTS,
+        # for a release whose tag and GitHub Release were cut but whose publish
+        # never ran. This repo publishes nothing, so leave it BLANK: a value
+        # here only skips release-please and finishes having done nothing. It
+        # lives in the caller because a called workflow cannot declare its
+        # caller's triggers.
+        description: 'Existing tag to re-publish. Leave blank — this repo has no publish job; a Swift release is its tag.'
+        required: false
+        type: string
+        default: ''
 
+# Workflow-level permissions are the CEILING for the called workflow's own job,
+# which asks for exactly these two: release-please opens/updates the release PR
+# and writes the tag. Narrowing either here would fail the call, not the stub.
 permissions:
   contents: write
   pull-requests: write
@@ -15,10 +52,10 @@ concurrency:
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: googleapis/release-please-action@v5
-        with:
-          token: ${{ secrets.RELEASE_PAT }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+    uses: chrischall/workflows/.github/workflows/reusable-release-please.yml@main
+    with:
+      republish_tag: ${{ inputs.republish_tag }}
+    secrets:
+      # Not GITHUB_TOKEN: events a GITHUB_TOKEN causes do not trigger
+      # workflows, so the release PR would never get CI or a review.
+      release_pat: ${{ secrets.RELEASE_PAT }}
