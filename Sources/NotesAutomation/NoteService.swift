@@ -105,14 +105,14 @@ public struct NoteService: Sendable {
     }
 
     /// Searches notes by a case-insensitive substring match against name
-    /// or body.
+    /// or plain-text body (never the underlying HTML markup).
     ///
     /// An empty or whitespace-only `query` returns `[]` immediately
     /// without running any AppleScript — a cheap guard against accidental
     /// full-library scans.
     ///
     /// - Parameters:
-    ///   - query: Substring to match against each note's name and body.
+    ///   - query: Substring to match against each note's name and plain-text body.
     ///   - limit: Maximum number of results. Defaults to `20`.
     ///   - offset: Number of leading matches to skip, for paging. Defaults
     ///     to `0`.
@@ -579,7 +579,7 @@ public struct NoteService: Sendable {
     ///
     /// When `query` is `nil` or empty, the script returns the most
     /// recently modified notes. When set, the script applies a
-    /// case-insensitive `name contains` / `body contains` filter.
+    /// case-insensitive `name contains` / `plaintext contains` filter.
     ///
     /// > Note:
     /// > Iterating a `whose` filter result directly (e.g.
@@ -606,7 +606,10 @@ public struct NoteService: Sendable {
         var anchorHandler = ""
         if let query, !query.isEmpty {
             let esc = escapeForAppleScript(query)
-            filter = "whose (name contains \"\(esc)\") or (body contains \"\(esc)\")"
+            // `plaintext`, not `body`: `body` is Notes.app's HTML, so words
+            // like "div", "br" or "amp" would match nearly every note, and
+            // text containing `&` or `<` (stored as entities) would miss.
+            filter = "whose (name contains \"\(esc)\") or (plaintext contains \"\(esc)\")"
             // A search hit deep in the body is useless behind a first-line
             // preview — window the snippet around the first match instead.
             // `offset of` ignores case by default, matching the `contains`
