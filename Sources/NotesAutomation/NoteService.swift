@@ -105,14 +105,14 @@ public struct NoteService: Sendable {
     }
 
     /// Searches notes by a case-insensitive substring match against name
-    /// or body.
+    /// or plain-text body (never the underlying HTML markup).
     ///
     /// An empty or whitespace-only `query` returns `[]` immediately
     /// without running any AppleScript — a cheap guard against accidental
     /// full-library scans.
     ///
     /// - Parameters:
-    ///   - query: Substring to match against each note's name and body.
+    ///   - query: Substring to match against each note's name and plain-text body.
     ///   - limit: Maximum number of results. Defaults to `20`.
     ///   - offset: Number of leading matches to skip, for paging. Defaults
     ///     to `0`.
@@ -326,12 +326,15 @@ public struct NoteService: Sendable {
     ///     values past the end yield an empty ``NoteBodyPage/text`` with
     ///     `start == end == total`.
     ///   - maxChars: Window size, or `nil` for everything from `offset` on.
+    ///     Negative values clamp to `0`; values past the end clamp to it.
     /// - Returns: The window plus the positions a caller needs to report
     ///   truncation and page further.
     public static func bodyPage(_ body: String, offset: Int, maxChars: Int?) -> NoteBodyPage {
         let total = body.count
         let start = min(max(0, offset), total)
-        let end = maxChars.map { min(total, start + max(0, $0)) } ?? total
+        // `min(…, total - start)` before adding, so a huge maxChars can't
+        // overflow `start + maxChars`.
+        let end = maxChars.map { start + min(max(0, $0), total - start) } ?? total
         let s = body.index(body.startIndex, offsetBy: start)
         let e = body.index(body.startIndex, offsetBy: end)
         return NoteBodyPage(text: String(body[s ..< e]), start: start, end: end, total: total)
@@ -352,7 +355,7 @@ public struct NoteService: Sendable {
     ///   - query: Text to look for, matched case-insensitively.
     ///   - body: The full body to excerpt.
     ///   - maxLength: Window size before the `…` markers. Defaults to
-    ///     ``snippetPreviewMaxLength``.
+    ///     ``snippetPreviewMaxLength``. Negative values clamp to `0`.
     /// - Returns: The excerpt, or `nil` when `body` doesn't contain `query`
     ///   — callers keep whatever preview they already had.
     public static func matchExcerpt(
@@ -360,9 +363,13 @@ public struct NoteService: Sendable {
         maxLength: Int = NoteService.snippetPreviewMaxLength
     ) -> String? {
         guard let match = body.range(of: query, options: [.caseInsensitive]) else { return nil }
+        // Clamp so a negative maxLength can't build an inverted range and
+        // a huge one can't overflow `start + maxLength`.
+        let maxLength = max(0, maxLength)
+        let total = body.count
         let matchStart = body.distance(from: body.startIndex, to: match.lowerBound)
         let start = max(0, matchStart - maxLength / 4)
-        let end = min(body.count, start + maxLength)
+        let end = start + min(maxLength, total - start)
         let s = body.index(body.startIndex, offsetBy: start)
         let e = body.index(body.startIndex, offsetBy: end)
         var text = String(body[s ..< e])
@@ -370,7 +377,7 @@ public struct NoteService: Sendable {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
         if start > 0 { text = "…" + text }
-        if end < body.count { text += "…" }
+        if end < total { text += "…" }
         return text
     }
 
@@ -579,7 +586,7 @@ public struct NoteService: Sendable {
     ///
     /// When `query` is `nil` or empty, the script returns the most
     /// recently modified notes. When set, the script applies a
-    /// case-insensitive `name contains` / `body contains` filter.
+    /// case-insensitive `name contains` / `plaintext contains` filter.
     ///
     /// > Note:
     /// > Iterating a `whose` filter result directly (e.g.
@@ -595,9 +602,10 @@ public struct NoteService: Sendable {
     ///
     /// - Parameters:
     ///   - query: Substring to match, or `nil` for an unfiltered list.
-    ///   - limit: Maximum notes to emit.
+    ///   - limit: Maximum notes to emit. Negative values clamp to `0`.
     ///   - offset: Number of leading matches to skip before emitting, for
-    ///     paging. The repeat loop simply starts at `offset + 1`.
+    ///     paging. The repeat loop simply starts at `offset + 1`. Negative
+    ///     values clamp to `0`.
     /// - Returns: AppleScript source. Output format is one note per line:
     ///   `<id>\t<title>\t<folder>\t<snippet>\n`.
     static func listOrSearchScript(query: String?, limit: Int, offset: Int = 0) -> String {
@@ -606,7 +614,10 @@ public struct NoteService: Sendable {
         var anchorHandler = ""
         if let query, !query.isEmpty {
             let esc = escapeForAppleScript(query)
-            filter = "whose (name contains \"\(esc)\") or (body contains \"\(esc)\")"
+            // `plaintext`, not `body`: `body` is Notes.app's HTML, so words
+            // like "div", "br" or "amp" would match nearly every note, and
+            // text containing `&` or `<` (stored as entities) would miss.
+            filter = "whose (name contains \"\(esc)\") or (plaintext contains \"\(esc)\")"
             // A search hit deep in the body is useless behind a first-line
             // preview — window the snippet around the first match instead.
             // `offset of` ignores case by default, matching the `contains`
@@ -634,7 +645,12 @@ public struct NoteService: Sendable {
             filter = ""
             snippetClause = "if (length of nbody) > \(snippetPreviewMaxLength) then set nbody to (text 1 thru \(snippetPreviewMaxLength) of nbody) & \"...\""
         }
-        let start = max(0, offset) + 1
+        // Clamp before the `+ 1` so offset = Int.max can't overflow, and
+        // keep both numbers inside AppleScript's integer range. A negative
+        // limit means "nothing", matching NoteStoreReader.
+        let maxScriptInt = Int(Int32.max)
+        let start = min(max(0, offset), maxScriptInt - 1) + 1
+        let limit = min(max(0, limit), maxScriptInt)
         return """
         tell application "Notes"
             set out to ""

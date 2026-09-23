@@ -35,11 +35,21 @@ struct NoteServiceTests {
         #expect(script.contains("every note"))
     }
 
-    @Test("listOrSearchScript adds a name+body contains filter when query is given")
+    @Test("listOrSearchScript adds a name+plaintext contains filter when query is given")
     func searchScriptFilter() {
         let script = NoteService.listOrSearchScript(query: "groceries", limit: 10)
         #expect(script.contains("name contains \"groceries\""))
-        #expect(script.contains("body contains \"groceries\""))
+        #expect(script.contains("plaintext contains \"groceries\""))
+    }
+
+    @Test("listOrSearchScript never filters on the HTML body, so markup words don't match every note")
+    func searchScriptDoesNotFilterOnHTMLBody() {
+        // `body` is Notes.app's HTML (<div>, <br>, &amp;…): a query like
+        // "div" would match nearly every note. The filter must use the
+        // same `plaintext` the snippet is built from.
+        let script = NoteService.listOrSearchScript(query: "div", limit: 10)
+        #expect(!script.contains("(body contains"))
+        #expect(script.contains("whose (name contains \"div\") or (plaintext contains \"div\")"))
     }
 
     @Test("search returns [] without running a script for empty query")

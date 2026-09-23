@@ -133,8 +133,34 @@ public actor NoteStoreReader {
                 "to return a writable handle to the Notes store."
             )
         }
+        // Notes.app writes through WAL while we read. A checkpoint or
+        // recovery can briefly hold a lock; wait up to a second rather
+        // than failing (or, before step-error checking, truncating) on
+        // the first SQLITE_BUSY.
+        sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
+        let fnRC = sqlite3_create_function_v2(
+            handle, containsFunctionName, 2,
+            SQLITE_UTF8 | SQLITE_DETERMINISTIC, nil,
+            notesAutomationContains, nil, nil, nil
+        )
+        guard fnRC == SQLITE_OK else {
+            let msg = String(cString: sqlite3_errmsg(handle))
+            sqlite3_close_v2(handle)
+            throw NoteStoreReaderError.sqliteError(
+                "Failed to register \(containsFunctionName): \(msg)"
+            )
+        }
         return handle
     }
+
+    /// Name of the SQL function registered on every handle for
+    /// ``search(query:limit:offset:)``: `fn(haystack, needle)` is `1` when
+    /// `haystack` contains `needle` ignoring case (full Unicode), else `0`.
+    static let containsFunctionName = "notes_automation_contains"
+
+    /// How long a query waits on a locked store before giving up with
+    /// ``NoteStoreReaderError/sqliteError(_:)``.
+    static let busyTimeoutMilliseconds: Int32 = 1000
 
     // MARK: - Public queries
 
@@ -144,28 +170,37 @@ public actor NoteStoreReader {
     /// modification date descending.
     ///
     /// - Parameters:
-    ///   - limit: Maximum number of notes to return.
-    ///   - offset: Number of leading notes to skip, for paging.
+    ///   - limit: Maximum number of notes to return. Negative values
+    ///     clamp to `0` (an empty result).
+    ///   - offset: Number of leading notes to skip, for paging. Negative
+    ///     values clamp to `0`.
     public func list(limit: Int = 20, offset: Int = 0) async throws -> [Note] {
         try runNoteQuery(where: "", args: [], limit: limit, offset: offset)
     }
 
     /// Case-insensitive substring match against title and snippet.
     ///
+    /// Case folding is full Unicode (`Ä` matches `ä`), and every character
+    /// of `query` — including `%`, `_` and `\` — matches literally. That
+    /// mirrors AppleScript's `contains`, so both paths agree.
+    ///
     /// An empty or whitespace-only query returns `[]` without touching
     /// the DB — matches ``NoteService/search(query:limit:)``.
     ///
     /// - Parameters:
     ///   - query: Substring to match against title and snippet.
-    ///   - limit: Maximum number of results.
-    ///   - offset: Number of leading matches to skip, for paging.
+    ///   - limit: Maximum number of results. Negative values clamp to `0`.
+    ///   - offset: Number of leading matches to skip, for paging. Negative
+    ///     values clamp to `0`.
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
-        let needle = "%\(trimmed.lowercased())%"
+        // Not `LOWER(col) LIKE ?`: the system SQLite's LOWER() folds ASCII
+        // only, and LIKE would treat `%` / `_` in the query as wildcards.
+        let fn = Self.containsFunctionName
         return try runNoteQuery(
-            where: "AND (LOWER(n.ZTITLE1) LIKE ? OR LOWER(n.ZSNIPPET) LIKE ?)",
-            args: [needle, needle],
+            where: "AND (\(fn)(n.ZTITLE1, ?) OR \(fn)(n.ZSNIPPET, ?))",
+            args: [trimmed, trimmed],
             limit: limit,
             offset: offset
         )
@@ -203,9 +238,12 @@ public actor NoteStoreReader {
         defer { sqlite3_finalize(stmt) }
 
         var results: [String] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        var stepRC = sqlite3_step(stmt)
+        while stepRC == SQLITE_ROW {
             if let name = columnText(stmt, 0) { results.append(name) }
+            stepRC = sqlite3_step(stmt)
         }
+        try Self.requireDone(stepRC, db: db)
         return results
     }
 
@@ -267,11 +305,15 @@ public actor NoteStoreReader {
         for (i, s) in args.enumerated() {
             sqlite3_bind_text(stmt, Int32(i + 1), s, -1, transient)
         }
-        sqlite3_bind_int(stmt, Int32(args.count + 1), Int32(limit))
-        sqlite3_bind_int(stmt, Int32(args.count + 2), Int32(max(0, offset)))
+        // 64-bit binds so a caller-supplied value past Int32 can't trap
+        // the conversion. A negative limit clamps to 0: SQLite reads
+        // `LIMIT -1` as "unlimited", which would return the whole library.
+        sqlite3_bind_int64(stmt, Int32(args.count + 1), Int64(max(0, limit)))
+        sqlite3_bind_int64(stmt, Int32(args.count + 2), Int64(max(0, offset)))
 
         var results: [Note] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        var stepRC = sqlite3_step(stmt)
+        while stepRC == SQLITE_ROW {
             let pk = sqlite3_column_int64(stmt, 0)
             let zid = columnText(stmt, 1) ?? ""
             let title = columnText(stmt, 2) ?? ""
@@ -279,11 +321,25 @@ public actor NoteStoreReader {
             let folder = columnText(stmt, 4) ?? ""
             let id = mintID(pk: pk, zid: zid)
             results.append(Note(id: id, title: title, snippet: snippet, folder: folder))
+            stepRC = sqlite3_step(stmt)
         }
+        try Self.requireDone(stepRC, db: db)
         return results
     }
 
     // MARK: - Helpers
+
+    /// A step loop ends on anything that isn't `SQLITE_ROW`; only
+    /// `SQLITE_DONE` means the result set is complete. Anything else
+    /// (`SQLITE_BUSY`, `SQLITE_CORRUPT`, `SQLITE_IOERR`, a runtime
+    /// error) would otherwise surface as a silently truncated or empty
+    /// result — throw instead so callers can fall back to ``NoteService``.
+    private static func requireDone(_ rc: Int32, db: OpaquePointer) throws {
+        guard rc == SQLITE_DONE else {
+            let msg = String(cString: sqlite3_errmsg(db))
+            throw NoteStoreReaderError.sqliteError("step failed (rc=\(rc)): \(msg)")
+        }
+    }
 
     /// Synthesize the Core Data URI format that ``NoteService`` returns,
     /// so ids are interchangeable across the two paths.
@@ -319,6 +375,28 @@ public actor NoteStoreReader {
     private func columnText(_ stmt: OpaquePointer, _ col: Int32) -> String? {
         Self.columnText(stmt, col)
     }
+}
+
+/// SQLite scalar function backing ``NoteStoreReader/containsFunctionName``.
+///
+/// A free function (not a closure) so it converts to the `@convention(c)`
+/// pointer `sqlite3_create_function_v2` expects. NULL on either side is
+/// "no match".
+private func notesAutomationContains(
+    _ context: OpaquePointer?,
+    _ argc: Int32,
+    _ argv: UnsafeMutablePointer<OpaquePointer?>?
+) {
+    guard argc == 2, let argv,
+          let haystackPtr = sqlite3_value_text(argv[0]),
+          let needlePtr = sqlite3_value_text(argv[1]) else {
+        sqlite3_result_int(context, 0)
+        return
+    }
+    let haystack = String(cString: haystackPtr)
+    let needle = String(cString: needlePtr)
+    let found = haystack.range(of: needle, options: [.caseInsensitive]) != nil
+    sqlite3_result_int(context, found ? 1 : 0)
 }
 
 /// Errors surfaced by ``NoteStoreReader``.
