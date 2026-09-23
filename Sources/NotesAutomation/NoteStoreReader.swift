@@ -138,8 +138,25 @@ public actor NoteStoreReader {
         // than failing (or, before step-error checking, truncating) on
         // the first SQLITE_BUSY.
         sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
+        let fnRC = sqlite3_create_function_v2(
+            handle, containsFunctionName, 2,
+            SQLITE_UTF8 | SQLITE_DETERMINISTIC, nil,
+            notesAutomationContains, nil, nil, nil
+        )
+        guard fnRC == SQLITE_OK else {
+            let msg = String(cString: sqlite3_errmsg(handle))
+            sqlite3_close_v2(handle)
+            throw NoteStoreReaderError.sqliteError(
+                "Failed to register \(containsFunctionName): \(msg)"
+            )
+        }
         return handle
     }
+
+    /// Name of the SQL function registered on every handle for
+    /// ``search(query:limit:offset:)``: `fn(haystack, needle)` is `1` when
+    /// `haystack` contains `needle` ignoring case (full Unicode), else `0`.
+    static let containsFunctionName = "notes_automation_contains"
 
     /// How long a query waits on a locked store before giving up with
     /// ``NoteStoreReaderError/sqliteError(_:)``.
@@ -161,6 +178,10 @@ public actor NoteStoreReader {
 
     /// Case-insensitive substring match against title and snippet.
     ///
+    /// Case folding is full Unicode (`Ä` matches `ä`), and every character
+    /// of `query` — including `%`, `_` and `\` — matches literally. That
+    /// mirrors AppleScript's `contains`, so both paths agree.
+    ///
     /// An empty or whitespace-only query returns `[]` without touching
     /// the DB — matches ``NoteService/search(query:limit:)``.
     ///
@@ -171,10 +192,12 @@ public actor NoteStoreReader {
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
-        let needle = "%\(trimmed.lowercased())%"
+        // Not `LOWER(col) LIKE ?`: the system SQLite's LOWER() folds ASCII
+        // only, and LIKE would treat `%` / `_` in the query as wildcards.
+        let fn = Self.containsFunctionName
         return try runNoteQuery(
-            where: "AND (LOWER(n.ZTITLE1) LIKE ? OR LOWER(n.ZSNIPPET) LIKE ?)",
-            args: [needle, needle],
+            where: "AND (\(fn)(n.ZTITLE1, ?) OR \(fn)(n.ZSNIPPET, ?))",
+            args: [trimmed, trimmed],
             limit: limit,
             offset: offset
         )
@@ -346,6 +369,28 @@ public actor NoteStoreReader {
     private func columnText(_ stmt: OpaquePointer, _ col: Int32) -> String? {
         Self.columnText(stmt, col)
     }
+}
+
+/// SQLite scalar function backing ``NoteStoreReader/containsFunctionName``.
+///
+/// A free function (not a closure) so it converts to the `@convention(c)`
+/// pointer `sqlite3_create_function_v2` expects. NULL on either side is
+/// "no match".
+private func notesAutomationContains(
+    _ context: OpaquePointer?,
+    _ argc: Int32,
+    _ argv: UnsafeMutablePointer<OpaquePointer?>?
+) {
+    guard argc == 2, let argv,
+          let haystackPtr = sqlite3_value_text(argv[0]),
+          let needlePtr = sqlite3_value_text(argv[1]) else {
+        sqlite3_result_int(context, 0)
+        return
+    }
+    let haystack = String(cString: haystackPtr)
+    let needle = String(cString: needlePtr)
+    let found = haystack.range(of: needle, options: [.caseInsensitive]) != nil
+    sqlite3_result_int(context, found ? 1 : 0)
 }
 
 /// Errors surfaced by ``NoteStoreReader``.
