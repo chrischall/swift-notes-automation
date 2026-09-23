@@ -133,8 +133,17 @@ public actor NoteStoreReader {
                 "to return a writable handle to the Notes store."
             )
         }
+        // Notes.app writes through WAL while we read. A checkpoint or
+        // recovery can briefly hold a lock; wait up to a second rather
+        // than failing (or, before step-error checking, truncating) on
+        // the first SQLITE_BUSY.
+        sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
         return handle
     }
+
+    /// How long a query waits on a locked store before giving up with
+    /// ``NoteStoreReaderError/sqliteError(_:)``.
+    static let busyTimeoutMilliseconds: Int32 = 1000
 
     // MARK: - Public queries
 
@@ -203,9 +212,12 @@ public actor NoteStoreReader {
         defer { sqlite3_finalize(stmt) }
 
         var results: [String] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        var stepRC = sqlite3_step(stmt)
+        while stepRC == SQLITE_ROW {
             if let name = columnText(stmt, 0) { results.append(name) }
+            stepRC = sqlite3_step(stmt)
         }
+        try Self.requireDone(stepRC, db: db)
         return results
     }
 
@@ -271,7 +283,8 @@ public actor NoteStoreReader {
         sqlite3_bind_int(stmt, Int32(args.count + 2), Int32(max(0, offset)))
 
         var results: [Note] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        var stepRC = sqlite3_step(stmt)
+        while stepRC == SQLITE_ROW {
             let pk = sqlite3_column_int64(stmt, 0)
             let zid = columnText(stmt, 1) ?? ""
             let title = columnText(stmt, 2) ?? ""
@@ -279,11 +292,25 @@ public actor NoteStoreReader {
             let folder = columnText(stmt, 4) ?? ""
             let id = mintID(pk: pk, zid: zid)
             results.append(Note(id: id, title: title, snippet: snippet, folder: folder))
+            stepRC = sqlite3_step(stmt)
         }
+        try Self.requireDone(stepRC, db: db)
         return results
     }
 
     // MARK: - Helpers
+
+    /// A step loop ends on anything that isn't `SQLITE_ROW`; only
+    /// `SQLITE_DONE` means the result set is complete. Anything else
+    /// (`SQLITE_BUSY`, `SQLITE_CORRUPT`, `SQLITE_IOERR`, a runtime
+    /// error) would otherwise surface as a silently truncated or empty
+    /// result — throw instead so callers can fall back to ``NoteService``.
+    private static func requireDone(_ rc: Int32, db: OpaquePointer) throws {
+        guard rc == SQLITE_DONE else {
+            let msg = String(cString: sqlite3_errmsg(db))
+            throw NoteStoreReaderError.sqliteError("step failed (rc=\(rc)): \(msg)")
+        }
+    }
 
     /// Synthesize the Core Data URI format that ``NoteService`` returns,
     /// so ids are interchangeable across the two paths.
