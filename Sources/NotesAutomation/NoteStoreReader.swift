@@ -170,8 +170,10 @@ public actor NoteStoreReader {
     /// modification date descending.
     ///
     /// - Parameters:
-    ///   - limit: Maximum number of notes to return.
-    ///   - offset: Number of leading notes to skip, for paging.
+    ///   - limit: Maximum number of notes to return. Negative values
+    ///     clamp to `0` (an empty result).
+    ///   - offset: Number of leading notes to skip, for paging. Negative
+    ///     values clamp to `0`.
     public func list(limit: Int = 20, offset: Int = 0) async throws -> [Note] {
         try runNoteQuery(where: "", args: [], limit: limit, offset: offset)
     }
@@ -187,8 +189,9 @@ public actor NoteStoreReader {
     ///
     /// - Parameters:
     ///   - query: Substring to match against title and snippet.
-    ///   - limit: Maximum number of results.
-    ///   - offset: Number of leading matches to skip, for paging.
+    ///   - limit: Maximum number of results. Negative values clamp to `0`.
+    ///   - offset: Number of leading matches to skip, for paging. Negative
+    ///     values clamp to `0`.
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
@@ -302,8 +305,11 @@ public actor NoteStoreReader {
         for (i, s) in args.enumerated() {
             sqlite3_bind_text(stmt, Int32(i + 1), s, -1, transient)
         }
-        sqlite3_bind_int(stmt, Int32(args.count + 1), Int32(limit))
-        sqlite3_bind_int(stmt, Int32(args.count + 2), Int32(max(0, offset)))
+        // 64-bit binds so a caller-supplied value past Int32 can't trap
+        // the conversion. A negative limit clamps to 0: SQLite reads
+        // `LIMIT -1` as "unlimited", which would return the whole library.
+        sqlite3_bind_int64(stmt, Int32(args.count + 1), Int64(max(0, limit)))
+        sqlite3_bind_int64(stmt, Int32(args.count + 2), Int64(max(0, offset)))
 
         var results: [Note] = []
         var stepRC = sqlite3_step(stmt)
