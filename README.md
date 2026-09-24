@@ -49,7 +49,7 @@ for note in recent {
     print("\(note.title) [\(note.folder)]: \(note.snippet)")
 }
 
-// Search — matches name OR body, case-insensitive
+// Search — matches title OR plain-text body (not HTML markup), case-insensitive
 let groceries = try await notes.search(query: "milk")
 
 // Page through a large library
@@ -104,7 +104,7 @@ methods are async and throw `AppleScriptError` or `NoteServiceError`.
 | Method | Purpose |
 |---|---|
 | `list(limit:) -> [Note]` | Most-recently-modified notes |
-| `search(query:limit:) -> [Note]` | Substring match against name OR body |
+| `search(query:limit:) -> [Note]` | Case-insensitive substring match against title OR plain-text body (not the HTML, so tag/attribute text never matches) |
 | `create(title:body:folder:) -> String` | Create a note; returns id |
 | `delete(id:)` | Permanently delete by id |
 
@@ -136,7 +136,7 @@ Protocol + production impl. Inject a fake in unit tests (see below).
 
 **Supported:**
 - List recent notes (via `NoteService` or fast `NoteStoreReader`)
-- Search by name/body substring (via either path)
+- Search by title/plain-text-body substring (via either path; `NoteStoreReader` matches the stored snippet)
 - Create notes in any folder (folder created if missing)
 - Delete notes by id
 
