@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.3](https://github.com/chrischall/swift-notes-automation/compare/v1.4.2...v1.4.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* harden note search and paging against bad input, Unicode, HTML matches and SQLite errors ([#58](https://github.com/chrischall/swift-notes-automation/issues/58)) ([f7cbc66](https://github.com/chrischall/swift-notes-automation/commit/f7cbc668d792795454b7e15cee267687ea5f28bb))
+
+
+### Documentation
+
+* describe note search as matching title or plain-text body, not HTML ([#61](https://github.com/chrischall/swift-notes-automation/issues/61)) ([1aa7b04](https://github.com/chrischall/swift-notes-automation/commit/1aa7b049b42326d8765fac9a0f942f45bb7f6da7))
+* describe note search as matching title or plain-text body, not HTML ([#61](https://github.com/chrischall/swift-notes-automation/issues/61)) ([8345b6e](https://github.com/chrischall/swift-notes-automation/commit/8345b6e0845b15bcd3e477b662ea01a303ba9612))
+
 ## [1.4.2](https://github.com/chrischall/swift-notes-automation/compare/v1.4.1...v1.4.2) (2026-08-09)
 
 
