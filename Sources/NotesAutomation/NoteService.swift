@@ -191,7 +191,9 @@ public struct NoteService: Sendable {
     /// Creates a new note with the given title and body.
     ///
     /// The body is wrapped in Notes.app's HTML-ish format with the title
-    /// as an `<h1>` so the UI shows a proper heading. Backslashes and quotes
+    /// as an `<h1>` so the UI shows a proper heading. The title is plain
+    /// text: it is HTML-escaped inside the `<h1>`, so `x < y & z` shows up
+    /// verbatim, while `body` is passed through as HTML. Backslashes and quotes
     /// in `title`, `body`, and `folder` are escaped (via
     /// ``escapeForAppleScript(_:)``) before they reach AppleScript, so no
     /// input can terminate the string literal early.
@@ -213,11 +215,13 @@ public struct NoteService: Sendable {
             throw NoteServiceError.invalidInput("title is required")
         }
         // Notes.app treats the body as HTML-ish; combining title + body so
-        // the UI renders a proper header. Both title and body are escaped for
+        // the UI renders a proper header. The title is plain text, so it is
+        // HTML-escaped for the <h1> (or "x < y" would be parsed as markup and
+        // the heading would disagree with `name`). Both are then escaped for
         // the AppleScript string literals via ``escapeForAppleScript`` so a
         // backslash or quote can't terminate the literal early (injection).
         let esc = Self.escapeForAppleScript
-        let noteBody = "<h1>\(esc(title))</h1>\n\(esc(body))"
+        let noteBody = "<h1>\(esc(Self.escapeForHTML(title)))</h1>\n\(esc(body))"
 
         let folderClause: String
         if let folder, !folder.isEmpty {
@@ -395,6 +399,17 @@ public struct NoteService: Sendable {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    /// Escapes plain text for use as HTML element content: `&`, `<`, `>`
+    /// and `"` become entities. `&` goes first so the entities it
+    /// introduces aren't escaped again.
+    static func escapeForHTML(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     /// Constructs a delete-by-id AppleScript.

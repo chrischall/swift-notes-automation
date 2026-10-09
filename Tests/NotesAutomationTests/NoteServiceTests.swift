@@ -225,6 +225,24 @@ struct NoteServiceTests {
         #expect(src.contains("\\\"quoted\\\""))
     }
 
+    @Test("create HTML-escapes the title inside the <h1> but keeps the raw name")
+    func createHTMLEscapesTitleHeading() async throws {
+        let runner = FakeAppleScriptRunner()
+        runner.queue("id")
+        let svc = NoteService(runner: runner)
+
+        _ = try await svc.create(title: "Fix <b> tag: x < y & \"z\"", body: "<p>body</p>")
+
+        let src = runner.calls[0]
+        // Notes.app parses the body as HTML, so markup in the title must be
+        // entity-escaped or the heading is mangled/swallowed…
+        #expect(src.contains("<h1>Fix &lt;b&gt; tag: x &lt; y &amp; &quot;z&quot;</h1>"))
+        // …while the note's name stays the literal title (AppleScript-escaped only).
+        #expect(src.contains("name:\"Fix <b> tag: x < y & \\\"z\\\"\""))
+        // The body is the caller's HTML and passes through untouched.
+        #expect(src.contains("<p>body</p>"))
+    }
+
     @Test("create with empty body still sends a valid script")
     func createEmptyBody() async throws {
         let runner = FakeAppleScriptRunner()
