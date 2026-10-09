@@ -120,7 +120,7 @@ public struct NoteService: Sendable {
     /// - Throws: ``AppleScriptError/runtime(_:)`` when Notes.app is not
     ///   running or Automation permission is denied.
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
-        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         let source = Self.listOrSearchScript(query: query, limit: limit, offset: offset)
         let raw = try await runner.run(source: source)
         return Self.parseNoteLines(raw)
@@ -157,7 +157,7 @@ public struct NoteService: Sendable {
     ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running
     ///     or Automation permission is denied.
     public func get(id: String) async throws -> NoteDetail {
-        guard !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("id is required")
         }
         let raw = try await runner.run(source: Self.getScript(id: id))
@@ -209,7 +209,7 @@ public struct NoteService: Sendable {
     ///   empty or whitespace-only. ``AppleScriptError/runtime(_:)`` when
     ///   Notes.app is not running or Automation permission is denied.
     public func create(title: String, body: String, folder: String? = nil) async throws -> String {
-        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("title is required")
         }
         // Notes.app treats the body as HTML-ish; combining title + body so
@@ -278,7 +278,7 @@ public struct NoteService: Sendable {
         body: String? = nil,
         folder: String? = nil
     ) async throws {
-        guard !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("id is required")
         }
         guard title != nil || body != nil || folder != nil else {
@@ -305,7 +305,7 @@ public struct NoteService: Sendable {
     ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running,
     ///     Automation permission is denied, or no note with that id exists.
     public func delete(id: String) async throws {
-        guard !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("id is required")
         }
         _ = try await runner.run(source: Self.deleteScript(id: id))

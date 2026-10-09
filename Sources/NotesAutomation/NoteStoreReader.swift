@@ -218,7 +218,7 @@ public actor NoteStoreReader {
     ///   - offset: Number of leading matches to skip, for paging. Negative
     ///     values clamp to `0`.
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         // Not `LOWER(col) LIKE ?`: the system SQLite's LOWER() folds ASCII
         // only, and LIKE would treat `%` / `_` in the query as wildcards.
