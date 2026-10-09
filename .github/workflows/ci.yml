@@ -14,7 +14,10 @@ permissions:
 
 jobs:
   ci:
-    runs-on: macos-15
+    # All fleet Apple CI runs on the shared self-hosted Mac, not the scarce
+    # GitHub-hosted macOS slots (CodeQL Swift saturates those and starves the
+    # required `ci-gated` check).
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 10
     steps:
       # Deferred-merge gate (shared with the fleet), status mode: CI is
@@ -31,7 +34,9 @@ jobs:
         if: steps.gate.outputs.run == 'true'
       - name: Select Xcode
         if: steps.gate.outputs.run == 'true'
-        run: sudo xcode-select --switch /Applications/Xcode.app
+        # DEVELOPER_DIR, not `sudo xcode-select`: the self-hosted runner has no
+        # passwordless sudo, and a global switch would leak into other jobs.
+        run: echo "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer" >> "$GITHUB_ENV"
       - name: Swift version
         if: steps.gate.outputs.run == 'true'
         run: swift --version
