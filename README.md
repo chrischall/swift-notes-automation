@@ -74,7 +74,7 @@ let id = try await notes.create(
 // Update — edit title/body and/or move to another folder in place
 try await notes.update(id: id, title: "Weekly plan (v2)", folder: "Archive")
 
-// Delete — permanent; bypasses the Recently Deleted folder
+// Delete — Notes.app moves it to Recently Deleted (recoverable there)
 try await notes.delete(id: id)
 ```
 
@@ -91,7 +91,7 @@ let hits  = try await reader.search(query: "groceries")
 ```
 
 `NoteStoreReader` is **read-only** by design. Use `NoteService` for
-create/delete — writes go through Notes.app so iCloud sync keeps
+create/update/delete — writes go through Notes.app so iCloud sync keeps
 working. Requires Full Disk Access on macOS (see *Permissions*).
 
 ## API reference
@@ -103,10 +103,13 @@ methods are async and throw `AppleScriptError` or `NoteServiceError`.
 
 | Method | Purpose |
 |---|---|
-| `list(limit:) -> [Note]` | Most-recently-modified notes |
-| `search(query:limit:) -> [Note]` | Case-insensitive substring match against title OR plain-text body (not the HTML, so tag/attribute text never matches) |
+| `list(limit:offset:) -> [Note]` | Most-recently-modified notes |
+| `search(query:limit:offset:) -> [Note]` | Case-insensitive substring match against title OR plain-text body (not the HTML, so tag/attribute text never matches) |
+| `get(id:) -> NoteDetail` | One note's complete body (plain text + HTML) and dates. An unknown id throws `AppleScriptError.runtime` |
+| `folders() -> [String]` | Folder names |
 | `create(title:body:folder:) -> String` | Create a note; returns id |
-| `delete(id:)` | Permanently delete by id |
+| `update(id:title:body:folder:)` | Change title, body and/or folder in place |
+| `delete(id:)` | Delete by id — Notes.app moves the note to Recently Deleted |
 
 ### `NoteStoreReader`
 
@@ -116,8 +119,9 @@ Direct read-only SQLite reader. Methods are async and throw
 | Method | Purpose |
 |---|---|
 | `init(path:)` | Open `NoteStore.sqlite`. Defaults to standard location. |
-| `list(limit:) -> [Note]` | Fast equivalent of `NoteService.list` |
-| `search(query:limit:) -> [Note]` | Fast equivalent of `NoteService.search` |
+| `list(limit:offset:) -> [Note]` | Fast equivalent of `NoteService.list` |
+| `search(query:limit:offset:) -> [Note]` | Fast equivalent of `NoteService.search` |
+| `folders() -> [String]` | Folder names, excluding Recently Deleted |
 
 ### `Note`
 
@@ -137,13 +141,16 @@ Protocol + production impl. Inject a fake in unit tests (see below).
 **Supported:**
 - List recent notes (via `NoteService` or fast `NoteStoreReader`)
 - Search by title/plain-text-body substring (via either path; `NoteStoreReader` matches the stored snippet)
+- Read one note's full body, as plain text and Notes.app HTML (`NoteService.get`)
+- List folders
 - Create notes in any folder (folder created if missing)
-- Delete notes by id
+- Update a note's title, body and/or folder
+- Delete notes by id (they go to Recently Deleted, like deleting in the app)
 
 **Not supported (yet):**
-- Update (Notes AppleScript supports it; happy to take a PR)
-- Rich HTML content on read (plaintext snippet only; body is Core Data +
-  protobuf)
+- Rich content from `NoteStoreReader` (it returns the stored plain-text
+  snippet; the full body there is Core Data + protobuf — use
+  `NoteService.get` for the full body)
 - Attachments
 - iCloud sync state
 

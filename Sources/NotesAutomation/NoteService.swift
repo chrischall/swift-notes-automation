@@ -63,9 +63,9 @@ extension NoteServiceError: LocalizedError {
 ///
 /// ## Concurrency
 ///
-/// The type is a `Sendable` value type and performs all Notes.app work on
-/// a detached task inside the runner. Construct one instance and share it
-/// across concurrent callers.
+/// The type is a `Sendable` value type. All Notes.app work happens inside
+/// the runner — ``NSAppleScriptRunner`` executes each script on the main
+/// actor. Construct one instance and share it across concurrent callers.
 public struct NoteService: Sendable {
     private let runner: any AppleScriptRunner
 
@@ -152,10 +152,10 @@ public struct NoteService: Sendable {
     /// - Throws:
     ///   - ``NoteServiceError/invalidInput(_:)`` when `id` is empty.
     ///   - ``NoteServiceError/scriptFailure(_:)`` when Notes.app returned
-    ///     output that couldn't be parsed (for example, an empty result
-    ///     because no note has that id).
-    ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running
-    ///     or Automation permission is denied.
+    ///     output that couldn't be parsed.
+    ///   - ``AppleScriptError/runtime(_:)`` when no note has that id
+    ///     (`note id "…"` raises inside Notes.app), Notes.app is not
+    ///     running, or Automation permission is denied.
     public func get(id: String) async throws -> NoteDetail {
         guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("id is required")
@@ -297,7 +297,9 @@ public struct NoteService: Sendable {
 
     // MARK: - Delete
 
-    /// Permanently deletes a note by id. The id format matches what
+    /// Deletes a note by id. Like deleting in the app, Notes.app moves the
+    /// note to its Recently Deleted folder, where it stays recoverable until
+    /// purged — this does not erase it immediately. The id format matches what
     /// ``list(limit:)``, ``search(query:limit:)``, and ``create(title:body:folder:)``
     /// return (Notes.app's Core Data URI, e.g. `x-coredata://…/ICNote/p42`).
     ///
