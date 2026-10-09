@@ -138,6 +138,14 @@ struct NoteServiceTests {
         #expect(NoteService.oneLineHandler.contains("text item delimiters to {tab, linefeed, return}"))
     }
 
+    @Test("listOrSearchScript flattens title and folder too, so a tab in either can't shift fields", arguments: [nil, "milk"])
+    func listScriptFlattensTitleAndFolder(_ query: String?) {
+        let script = NoteService.listOrSearchScript(query: query, limit: 10)
+        #expect(script.contains(
+            "nid & \"\t\" & my oneLine(nname) & \"\t\" & my oneLine(nfolder) & \"\t\" & my oneLine(nbody) & linefeed"
+        ))
+    }
+
     @Test("listOrSearchScript escapes double-quotes in the search query")
     func searchScriptEscapesQuery() {
         let script = NoteService.listOrSearchScript(query: "she said \"hi\"", limit: 10)

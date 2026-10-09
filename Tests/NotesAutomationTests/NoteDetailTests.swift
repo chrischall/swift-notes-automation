@@ -50,6 +50,14 @@ struct NoteDetailTests {
         #expect(s.contains("modification date"))
     }
 
+    @Test("getScript strips the record separator from title and folder so it can't shift later fields")
+    func getScriptStripsSeparatorFromTitleAndFolder() {
+        let script = NoteService.getScript(id: "x")
+        #expect(script.contains("set nname to my noSeparator(name of n)"))
+        #expect(script.contains("set nfolder to my noSeparator(name of (container of n))"))
+        #expect(script.contains(NoteService.noSeparatorHandler))
+    }
+
     @Test("getScript escapes backslashes and quotes in the id")
     func getScriptEscapesId() {
         let s = NoteService.getScript(id: "weird\"id\\x")

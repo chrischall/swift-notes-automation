@@ -93,6 +93,18 @@ struct NSAppleScriptRunnerTests {
         #expect(result == "a b c d é🎉||")
     }
 
+    @Test("the get-script noSeparator handler replaces U+001E with a space",
+          .disabled(if: !enabled, enabledComment))
+    func noSeparatorHandlerStrips() async throws {
+        let runner = NSAppleScriptRunner()
+        let source = NoteService.noSeparatorHandler + """
+
+            return my noSeparator("a" & (ASCII character 30) & "b") & "|" & my noSeparator("") & "|" & (AppleScript's text item delimiters as text)
+            """
+        let result = try await runner.run(source: source)
+        #expect(result == "a b||")
+    }
+
     @Test("run throws AppleScriptError.runtime when the script raises",
           .disabled(if: !enabled, enabledComment))
     func runtimeErrorIsThrown() async throws {

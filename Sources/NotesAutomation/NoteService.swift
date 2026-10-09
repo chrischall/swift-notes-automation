@@ -451,10 +451,10 @@ public struct NoteService: Sendable {
         tell application "Notes"
             set n to note id "\(esc)"
             set nid to id of n as string
-            set nname to name of n
+            set nname to my noSeparator(name of n)
             set nfolder to ""
             try
-                set nfolder to name of (container of n)
+                set nfolder to my noSeparator(name of (container of n))
             end try
             set nplain to plaintext of n
             set nhtml to body of n
@@ -479,8 +479,30 @@ public struct NoteService: Sendable {
         on isoDate(d)
             return (year of d as string) & "-" & pad2((month of d) as integer) & "-" & pad2(day of d) & "T" & pad2(hours of d) & ":" & pad2(minutes of d) & ":" & pad2(seconds of d)
         end isoDate
+
+        \(noSeparatorHandler)
         """
     }
+
+    /// AppleScript handler that replaces every ``detailFieldSeparator``
+    /// (`ASCII character 30`) in a string with a space.
+    ///
+    /// ``getScript(id:)`` runs the title and folder through it: a name
+    /// containing the separator would otherwise shift every later field
+    /// (dates, plain text, HTML) in ``parseNoteDetail(_:)``.
+    static let noSeparatorHandler = """
+        on noSeparator(s)
+            set oldTIDs to AppleScript's text item delimiters
+            try
+                set AppleScript's text item delimiters to (ASCII character 30)
+                set parts to text items of s
+                set AppleScript's text item delimiters to " "
+                set s to parts as text
+            end try
+            set AppleScript's text item delimiters to oldTIDs
+            return s
+        end noSeparator
+        """
 
     /// Constructs an update-note-by-id AppleScript.
     ///
@@ -684,7 +706,7 @@ public struct NoteService: Sendable {
                     try
                         set nfolder to name of (container of n)
                     end try
-                    set out to out & nid & "\t" & nname & "\t" & nfolder & "\t" & my oneLine(nbody) & linefeed
+                    set out to out & nid & "\t" & my oneLine(nname) & "\t" & my oneLine(nfolder) & "\t" & my oneLine(nbody) & linefeed
                     set found to found + 1
                 end try
             end repeat
