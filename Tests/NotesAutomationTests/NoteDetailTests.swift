@@ -95,6 +95,24 @@ struct NoteDetailTests {
         #expect(d?.plainText == "just a body")
     }
 
+    @Test("parseNoteDetail reads the wall-clock stamps in the zone in effect at parse time, not one captured at first use")
+    func parseNoteDetailUsesCurrentZone() throws {
+        let raw = ["id", "T", "F", "2026-01-15T09:30:00", "2026-07-01T00:00:05", "p", "h"]
+            .joined(separator: sep)
+        let utc = try #require(TimeZone(identifier: "UTC"))
+        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
+
+        // Parse in one zone first, so a formatter cached on first use
+        // would pin that zone for every later call…
+        let inUTC = try #require(NoteService.parseNoteDetail(raw, timeZone: utc))
+        // …then "travel".
+        let inTokyo = try #require(NoteService.parseNoteDetail(raw, timeZone: tokyo))
+
+        #expect(inUTC.creationDate == Date(timeIntervalSince1970: 1_768_469_400))
+        #expect(inTokyo.creationDate == Date(timeIntervalSince1970: 1_768_469_400 - 9 * 3600))
+        #expect(inUTC.modificationDate == Date(timeIntervalSince1970: 1_782_864_005))
+    }
+
     @Test("parseNoteDetail returns nil for output with too few fields")
     func parseMalformed() {
         #expect(NoteService.parseNoteDetail("only\u{001E}two\u{001E}fields") == nil)

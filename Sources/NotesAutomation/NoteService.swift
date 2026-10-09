@@ -582,13 +582,20 @@ public struct NoteService: Sendable {
 
     /// Locale-stable parser for the `yyyy-MM-dd'T'HH:mm:ss` local-time
     /// stamps emitted by ``getScript(id:)``'s `isoDate` handler.
-    static let detailDateFormatter: DateFormatter = {
+    ///
+    /// Built per parse rather than cached: AppleScript dates are
+    /// wall-clock times with no offset, so they must be read in the zone
+    /// in effect *now*. A static formatter would pin whatever zone was
+    /// current at first use and shift every date after the user changes
+    /// time zone in a long-running host. (A wall-clock time inside a DST
+    /// fall-back hour stays inherently ambiguous.)
+    static func detailDateFormatter(timeZone: TimeZone) -> DateFormatter {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        f.timeZone = TimeZone.current
+        f.timeZone = timeZone
         return f
-    }()
+    }
 
     /// Parses the record-separated output of ``getScript(id:)`` into a
     /// ``NoteDetail``.
@@ -598,23 +605,29 @@ public struct NoteService: Sendable {
     /// The body fields are returned verbatim — newlines and tabs are
     /// preserved, nothing is trimmed. Empty date fields parse to `nil`.
     ///
-    /// - Parameter raw: Raw script output.
+    /// - Parameters:
+    ///   - raw: Raw script output.
+    ///   - timeZone: Zone the wall-clock date stamps are read in. Defaults
+    ///     to the system's current zone, tracked as it changes.
     /// - Returns: The parsed detail, or `nil` when unparseable.
-    static func parseNoteDetail(_ raw: String) -> NoteDetail? {
+    static func parseNoteDetail(
+        _ raw: String, timeZone: TimeZone = .autoupdatingCurrent
+    ) -> NoteDetail? {
         let sep = Character(detailFieldSeparator)
         let fields = raw.split(separator: sep, omittingEmptySubsequences: false).map(String.init)
         guard fields.count >= 7 else { return nil }
         // If a body somehow contained the separator, keep every trailing
         // piece as part of the HTML rather than dropping data.
         let html = fields[6...].joined(separator: detailFieldSeparator)
+        let dates = detailDateFormatter(timeZone: timeZone)
         return NoteDetail(
             id: fields[0],
             title: fields[1],
             folder: fields[2],
             plainText: fields[5],
             html: html,
-            creationDate: fields[3].nonEmpty.flatMap { detailDateFormatter.date(from: $0) },
-            modificationDate: fields[4].nonEmpty.flatMap { detailDateFormatter.date(from: $0) }
+            creationDate: fields[3].nonEmpty.flatMap { dates.date(from: $0) },
+            modificationDate: fields[4].nonEmpty.flatMap { dates.date(from: $0) }
         )
     }
 
