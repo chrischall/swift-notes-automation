@@ -50,6 +50,14 @@ struct NoteDetailTests {
         #expect(s.contains("modification date"))
     }
 
+    @Test("getScript strips the record separator from title and folder so it can't shift later fields")
+    func getScriptStripsSeparatorFromTitleAndFolder() {
+        let script = NoteService.getScript(id: "x")
+        #expect(script.contains("set nname to my noSeparator(name of n)"))
+        #expect(script.contains("set nfolder to my noSeparator(name of (container of n))"))
+        #expect(script.contains(NoteService.noSeparatorHandler))
+    }
+
     @Test("getScript escapes backslashes and quotes in the id")
     func getScriptEscapesId() {
         let s = NoteService.getScript(id: "weird\"id\\x")
@@ -85,6 +93,24 @@ struct NoteDetailTests {
         #expect(d?.creationDate == nil)
         #expect(d?.modificationDate == nil)
         #expect(d?.plainText == "just a body")
+    }
+
+    @Test("parseNoteDetail reads the wall-clock stamps in the zone in effect at parse time, not one captured at first use")
+    func parseNoteDetailUsesCurrentZone() throws {
+        let raw = ["id", "T", "F", "2026-01-15T09:30:00", "2026-07-01T00:00:05", "p", "h"]
+            .joined(separator: sep)
+        let utc = try #require(TimeZone(identifier: "UTC"))
+        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
+
+        // Parse in one zone first, so a formatter cached on first use
+        // would pin that zone for every later call…
+        let inUTC = try #require(NoteService.parseNoteDetail(raw, timeZone: utc))
+        // …then "travel".
+        let inTokyo = try #require(NoteService.parseNoteDetail(raw, timeZone: tokyo))
+
+        #expect(inUTC.creationDate == Date(timeIntervalSince1970: 1_768_469_400))
+        #expect(inTokyo.creationDate == Date(timeIntervalSince1970: 1_768_469_400 - 9 * 3600))
+        #expect(inUTC.modificationDate == Date(timeIntervalSince1970: 1_782_864_005))
     }
 
     @Test("parseNoteDetail returns nil for output with too few fields")

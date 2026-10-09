@@ -80,6 +80,31 @@ struct NSAppleScriptRunnerTests {
         )
     }
 
+    @Test("the list/search oneLine handler turns tabs, linefeeds and returns into spaces",
+          .disabled(if: !enabled, enabledComment))
+    func oneLineHandlerFlattens() async throws {
+        let runner = NSAppleScriptRunner()
+        let source = NoteService.oneLineHandler + """
+
+            return my oneLine("a" & tab & "b" & linefeed & "c" & return & "d é🎉") & "|" & my oneLine("") & "|" & (AppleScript's text item delimiters as text)
+            """
+        let result = try await runner.run(source: source)
+        // Flattened, empty input survives, and the delimiters are restored.
+        #expect(result == "a b c d é🎉||")
+    }
+
+    @Test("the get-script noSeparator handler replaces U+001E with a space",
+          .disabled(if: !enabled, enabledComment))
+    func noSeparatorHandlerStrips() async throws {
+        let runner = NSAppleScriptRunner()
+        let source = NoteService.noSeparatorHandler + """
+
+            return my noSeparator("a" & (ASCII character 30) & "b") & "|" & my noSeparator("") & "|" & (AppleScript's text item delimiters as text)
+            """
+        let result = try await runner.run(source: source)
+        #expect(result == "a b||")
+    }
+
     @Test("run throws AppleScriptError.runtime when the script raises",
           .disabled(if: !enabled, enabledComment))
     func runtimeErrorIsThrown() async throws {

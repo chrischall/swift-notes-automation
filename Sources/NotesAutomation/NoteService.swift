@@ -63,9 +63,9 @@ extension NoteServiceError: LocalizedError {
 ///
 /// ## Concurrency
 ///
-/// The type is a `Sendable` value type and performs all Notes.app work on
-/// a detached task inside the runner. Construct one instance and share it
-/// across concurrent callers.
+/// The type is a `Sendable` value type. All Notes.app work happens inside
+/// the runner — ``NSAppleScriptRunner`` executes each script on the main
+/// actor. Construct one instance and share it across concurrent callers.
 public struct NoteService: Sendable {
     private let runner: any AppleScriptRunner
 
@@ -120,7 +120,7 @@ public struct NoteService: Sendable {
     /// - Throws: ``AppleScriptError/runtime(_:)`` when Notes.app is not
     ///   running or Automation permission is denied.
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
-        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         let source = Self.listOrSearchScript(query: query, limit: limit, offset: offset)
         let raw = try await runner.run(source: source)
         return Self.parseNoteLines(raw)
@@ -152,12 +152,12 @@ public struct NoteService: Sendable {
     /// - Throws:
     ///   - ``NoteServiceError/invalidInput(_:)`` when `id` is empty.
     ///   - ``NoteServiceError/scriptFailure(_:)`` when Notes.app returned
-    ///     output that couldn't be parsed (for example, an empty result
-    ///     because no note has that id).
-    ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running
-    ///     or Automation permission is denied.
+    ///     output that couldn't be parsed.
+    ///   - ``AppleScriptError/runtime(_:)`` when no note has that id
+    ///     (`note id "…"` raises inside Notes.app), Notes.app is not
+    ///     running, or Automation permission is denied.
     public func get(id: String) async throws -> NoteDetail {
-        guard !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("id is required")
         }
         let raw = try await runner.run(source: Self.getScript(id: id))
@@ -191,7 +191,9 @@ public struct NoteService: Sendable {
     /// Creates a new note with the given title and body.
     ///
     /// The body is wrapped in Notes.app's HTML-ish format with the title
-    /// as an `<h1>` so the UI shows a proper heading. Backslashes and quotes
+    /// as an `<h1>` so the UI shows a proper heading. The title is plain
+    /// text: it is HTML-escaped inside the `<h1>`, so `x < y & z` shows up
+    /// verbatim, while `body` is passed through as HTML. Backslashes and quotes
     /// in `title`, `body`, and `folder` are escaped (via
     /// ``escapeForAppleScript(_:)``) before they reach AppleScript, so no
     /// input can terminate the string literal early.
@@ -209,15 +211,17 @@ public struct NoteService: Sendable {
     ///   empty or whitespace-only. ``AppleScriptError/runtime(_:)`` when
     ///   Notes.app is not running or Automation permission is denied.
     public func create(title: String, body: String, folder: String? = nil) async throws -> String {
-        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("title is required")
         }
         // Notes.app treats the body as HTML-ish; combining title + body so
-        // the UI renders a proper header. Both title and body are escaped for
+        // the UI renders a proper header. The title is plain text, so it is
+        // HTML-escaped for the <h1> (or "x < y" would be parsed as markup and
+        // the heading would disagree with `name`). Both are then escaped for
         // the AppleScript string literals via ``escapeForAppleScript`` so a
         // backslash or quote can't terminate the literal early (injection).
         let esc = Self.escapeForAppleScript
-        let noteBody = "<h1>\(esc(title))</h1>\n\(esc(body))"
+        let noteBody = "<h1>\(esc(Self.escapeForHTML(title)))</h1>\n\(esc(body))"
 
         let folderClause: String
         if let folder, !folder.isEmpty {
@@ -278,7 +282,7 @@ public struct NoteService: Sendable {
         body: String? = nil,
         folder: String? = nil
     ) async throws {
-        guard !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("id is required")
         }
         guard title != nil || body != nil || folder != nil else {
@@ -293,7 +297,9 @@ public struct NoteService: Sendable {
 
     // MARK: - Delete
 
-    /// Permanently deletes a note by id. The id format matches what
+    /// Deletes a note by id. Like deleting in the app, Notes.app moves the
+    /// note to its Recently Deleted folder, where it stays recoverable until
+    /// purged — this does not erase it immediately. The id format matches what
     /// ``list(limit:)``, ``search(query:limit:)``, and ``create(title:body:folder:)``
     /// return (Notes.app's Core Data URI, e.g. `x-coredata://…/ICNote/p42`).
     ///
@@ -305,7 +311,7 @@ public struct NoteService: Sendable {
     ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running,
     ///     Automation permission is denied, or no note with that id exists.
     public func delete(id: String) async throws {
-        guard !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NoteServiceError.invalidInput("id is required")
         }
         _ = try await runner.run(source: Self.deleteScript(id: id))
@@ -397,6 +403,17 @@ public struct NoteService: Sendable {
             .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
+    /// Escapes plain text for use as HTML element content: `&`, `<`, `>`
+    /// and `"` become entities. `&` goes first so the entities it
+    /// introduces aren't escaped again.
+    static func escapeForHTML(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
     /// Constructs a delete-by-id AppleScript.
     ///
     /// Looks up the note via `note id "…"`, which references Notes.app's
@@ -436,10 +453,10 @@ public struct NoteService: Sendable {
         tell application "Notes"
             set n to note id "\(esc)"
             set nid to id of n as string
-            set nname to name of n
+            set nname to my noSeparator(name of n)
             set nfolder to ""
             try
-                set nfolder to name of (container of n)
+                set nfolder to my noSeparator(name of (container of n))
             end try
             set nplain to plaintext of n
             set nhtml to body of n
@@ -464,8 +481,30 @@ public struct NoteService: Sendable {
         on isoDate(d)
             return (year of d as string) & "-" & pad2((month of d) as integer) & "-" & pad2(day of d) & "T" & pad2(hours of d) & ":" & pad2(minutes of d) & ":" & pad2(seconds of d)
         end isoDate
+
+        \(noSeparatorHandler)
         """
     }
+
+    /// AppleScript handler that replaces every ``detailFieldSeparator``
+    /// (`ASCII character 30`) in a string with a space.
+    ///
+    /// ``getScript(id:)`` runs the title and folder through it: a name
+    /// containing the separator would otherwise shift every later field
+    /// (dates, plain text, HTML) in ``parseNoteDetail(_:)``.
+    static let noSeparatorHandler = """
+        on noSeparator(s)
+            set oldTIDs to AppleScript's text item delimiters
+            try
+                set AppleScript's text item delimiters to (ASCII character 30)
+                set parts to text items of s
+                set AppleScript's text item delimiters to " "
+                set s to parts as text
+            end try
+            set AppleScript's text item delimiters to oldTIDs
+            return s
+        end noSeparator
+        """
 
     /// Constructs an update-note-by-id AppleScript.
     ///
@@ -545,13 +584,20 @@ public struct NoteService: Sendable {
 
     /// Locale-stable parser for the `yyyy-MM-dd'T'HH:mm:ss` local-time
     /// stamps emitted by ``getScript(id:)``'s `isoDate` handler.
-    static let detailDateFormatter: DateFormatter = {
+    ///
+    /// Built per parse rather than cached: AppleScript dates are
+    /// wall-clock times with no offset, so they must be read in the zone
+    /// in effect *now*. A static formatter would pin whatever zone was
+    /// current at first use and shift every date after the user changes
+    /// time zone in a long-running host. (A wall-clock time inside a DST
+    /// fall-back hour stays inherently ambiguous.)
+    static func detailDateFormatter(timeZone: TimeZone) -> DateFormatter {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        f.timeZone = TimeZone.current
+        f.timeZone = timeZone
         return f
-    }()
+    }
 
     /// Parses the record-separated output of ``getScript(id:)`` into a
     /// ``NoteDetail``.
@@ -561,23 +607,29 @@ public struct NoteService: Sendable {
     /// The body fields are returned verbatim — newlines and tabs are
     /// preserved, nothing is trimmed. Empty date fields parse to `nil`.
     ///
-    /// - Parameter raw: Raw script output.
+    /// - Parameters:
+    ///   - raw: Raw script output.
+    ///   - timeZone: Zone the wall-clock date stamps are read in. Defaults
+    ///     to the system's current zone, tracked as it changes.
     /// - Returns: The parsed detail, or `nil` when unparseable.
-    static func parseNoteDetail(_ raw: String) -> NoteDetail? {
+    static func parseNoteDetail(
+        _ raw: String, timeZone: TimeZone = .autoupdatingCurrent
+    ) -> NoteDetail? {
         let sep = Character(detailFieldSeparator)
         let fields = raw.split(separator: sep, omittingEmptySubsequences: false).map(String.init)
         guard fields.count >= 7 else { return nil }
         // If a body somehow contained the separator, keep every trailing
         // piece as part of the HTML rather than dropping data.
         let html = fields[6...].joined(separator: detailFieldSeparator)
+        let dates = detailDateFormatter(timeZone: timeZone)
         return NoteDetail(
             id: fields[0],
             title: fields[1],
             folder: fields[2],
             plainText: fields[5],
             html: html,
-            creationDate: fields[3].nonEmpty.flatMap { detailDateFormatter.date(from: $0) },
-            modificationDate: fields[4].nonEmpty.flatMap { detailDateFormatter.date(from: $0) }
+            creationDate: fields[3].nonEmpty.flatMap { dates.date(from: $0) },
+            modificationDate: fields[4].nonEmpty.flatMap { dates.date(from: $0) }
         )
     }
 
@@ -669,21 +721,37 @@ public struct NoteService: Sendable {
                     try
                         set nfolder to name of (container of n)
                     end try
-                    set out to out & nid & "\t" & nname & "\t" & nfolder & "\t" & my oneLine(nbody) & linefeed
+                    set out to out & nid & "\t" & my oneLine(nname) & "\t" & my oneLine(nfolder) & "\t" & my oneLine(nbody) & linefeed
                     set found to found + 1
                 end try
             end repeat
             return out
         end tell
 
-        on oneLine(s)
-            try
-                set s to do shell script "printf %s " & quoted form of s & " | tr '\\t\\n\\r' '   '"
-            end try
-            return s
-        end oneLine\(anchorHandler)
+        \(oneLineHandler)\(anchorHandler)
         """
     }
+
+    /// AppleScript handler that flattens a string onto one line, turning
+    /// every tab, linefeed and carriage return into a space, so
+    /// ``parseNoteLines(_:)`` can split rows on newlines and fields on tabs.
+    ///
+    /// Uses AppleScript's text item delimiters in-process (restoring the
+    /// caller's delimiters afterwards) rather than `do shell script … | tr`,
+    /// which forked a shell per emitted note on the main thread.
+    static let oneLineHandler = """
+        on oneLine(s)
+            set oldTIDs to AppleScript's text item delimiters
+            try
+                set AppleScript's text item delimiters to {tab, linefeed, return}
+                set parts to text items of s
+                set AppleScript's text item delimiters to " "
+                set s to parts as text
+            end try
+            set AppleScript's text item delimiters to oldTIDs
+            return s
+        end oneLine
+        """
 
     /// Parses the tab-delimited output produced by ``listOrSearchScript(query:limit:)``.
     ///

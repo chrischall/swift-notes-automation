@@ -129,6 +129,23 @@ struct NoteServiceTests {
         #expect(script.contains("\u{2265} 7"))
     }
 
+    @Test("listOrSearchScript flattens snippets in-process, not with a shell per note", arguments: [nil, "milk"])
+    func listScriptNoShellPerNote(_ query: String?) {
+        let script = NoteService.listOrSearchScript(query: query, limit: 100)
+        // `do shell script` forked one `tr` per emitted note on the main thread.
+        #expect(!script.contains("do shell script"))
+        #expect(script.contains(NoteService.oneLineHandler))
+        #expect(NoteService.oneLineHandler.contains("text item delimiters to {tab, linefeed, return}"))
+    }
+
+    @Test("listOrSearchScript flattens title and folder too, so a tab in either can't shift fields", arguments: [nil, "milk"])
+    func listScriptFlattensTitleAndFolder(_ query: String?) {
+        let script = NoteService.listOrSearchScript(query: query, limit: 10)
+        #expect(script.contains(
+            "nid & \"\t\" & my oneLine(nname) & \"\t\" & my oneLine(nfolder) & \"\t\" & my oneLine(nbody) & linefeed"
+        ))
+    }
+
     @Test("listOrSearchScript escapes double-quotes in the search query")
     func searchScriptEscapesQuery() {
         let script = NoteService.listOrSearchScript(query: "she said \"hi\"", limit: 10)
@@ -223,6 +240,24 @@ struct NoteServiceTests {
         // Title + body should be escaped inside AppleScript string literals
         #expect(src.contains("She said \\\"hi\\\""))
         #expect(src.contains("\\\"quoted\\\""))
+    }
+
+    @Test("create HTML-escapes the title inside the <h1> but keeps the raw name")
+    func createHTMLEscapesTitleHeading() async throws {
+        let runner = FakeAppleScriptRunner()
+        runner.queue("id")
+        let svc = NoteService(runner: runner)
+
+        _ = try await svc.create(title: "Fix <b> tag: x < y & \"z\"", body: "<p>body</p>")
+
+        let src = runner.calls[0]
+        // Notes.app parses the body as HTML, so markup in the title must be
+        // entity-escaped or the heading is mangled/swallowed…
+        #expect(src.contains("<h1>Fix &lt;b&gt; tag: x &lt; y &amp; &quot;z&quot;</h1>"))
+        // …while the note's name stays the literal title (AppleScript-escaped only).
+        #expect(src.contains("name:\"Fix <b> tag: x < y & \\\"z\\\"\""))
+        // The body is the caller's HTML and passes through untouched.
+        #expect(src.contains("<p>body</p>"))
     }
 
     @Test("create with empty body still sends a valid script")
