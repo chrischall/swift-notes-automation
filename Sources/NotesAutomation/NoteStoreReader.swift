@@ -40,12 +40,16 @@ import SQLite3
 ///
 /// ## Concurrent safety
 ///
-/// The reader opens SQLite with `SQLITE_OPEN_READONLY`. Notes.app uses
-/// WAL journaling, which supports multiple readers concurrently with a
-/// single writer, so reads are safe while Notes.app is running.
+/// The reader opens SQLite with `SQLITE_OPEN_READONLY` (plus
+/// `PRAGMA query_only = 1` as a second guard). Notes.app uses WAL
+/// journaling, which supports multiple readers concurrently with a single
+/// writer, so reads are safe while Notes.app is running. A read-only
+/// handle also never checkpoints the WAL into `NoteStore.sqlite` when it
+/// closes — even when it is the last connection because Notes.app isn't
+/// running — so the reader never writes to Apple's store.
 ///
-/// The type is an `actor`, so concurrent callers serialize through the
-/// underlying handle without data races.
+/// The type is an `actor`, so concurrent callers are serialized. Each
+/// query opens and closes its own handle (see ``init(path:)``).
 ///
 /// ## Schema assumptions
 ///
@@ -73,10 +77,9 @@ public actor NoteStoreReader {
     ///
     /// Each query opens and closes its own SQLite handle. Counterintuitive
     /// but necessary: Notes.app commits writes via WAL while our reader is
-    /// running, and a long-lived handle holds a read-snapshot that doesn't
-    /// refresh reliably even with `SQLITE_OPEN_READWRITE` + `PRAGMA
-    /// query_only = 1` (reads stay on the snapshot current at the last
-    /// refresh, so AppleScript-committed deletes don't show up until the
+    /// running, and a long-lived handle held a read-snapshot that didn't
+    /// refresh reliably (reads stayed on the snapshot current at the last
+    /// refresh, so AppleScript-committed deletes didn't show up until the
     /// next reader restart). Opening fresh per query costs ~1ms and
     /// guarantees the read sees Notes.app's latest commits.
     ///
@@ -102,28 +105,38 @@ public actor NoteStoreReader {
     /// Opens a fresh SQLite handle for one query. Callers must `sqlite3_close_v2`
     /// it when done — `defer` next to the call site is the idiomatic spot.
     ///
-    /// Opens read-write + `PRAGMA query_only = 1` (not `SQLITE_OPEN_READONLY`)
-    /// because read-only + WAL can't write the `-shm` file that coordinates
-    /// snapshot refresh. Read-write + `query_only = 1` gets WAL refresh
-    /// semantics while SQLite still rejects accidental writes.
+    /// Opens with `SQLITE_OPEN_READONLY`, not read-write + `query_only`:
+    /// `query_only` blocks SQL writes but not SQLite's own WAL maintenance,
+    /// so a read-write handle that was the last connection would checkpoint
+    /// the WAL into `NoteStore.sqlite` on close — a write to Apple's store
+    /// from a third-party process. A read-only
+    /// handle can't take the write lock that needs, and because every query
+    /// opens a fresh handle it still sees Notes.app's latest commits.
+    ///
+    /// One exception: a read-only handle can't open a WAL-mode store whose
+    /// `-wal` file doesn't exist yet (Notes.app shut down cleanly), and
+    /// fails with `SQLITE_CANTOPEN`. Only then does this fall back to
+    /// read-write + `query_only`. With no `-wal` there are no committed
+    /// frames to checkpoint, so that handle has nothing to write into the
+    /// store (Apple's SQLite persists the empty `-wal`/`-shm` it creates,
+    /// after which later queries take the read-only path).
     private static func openHandle(path: String) throws -> OpaquePointer {
-        var handle: OpaquePointer?
-        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX
-        let rc = sqlite3_open_v2(path, &handle, flags, nil)
-        guard rc == SQLITE_OK, let handle else {
-            let msg = handle.map { String(cString: sqlite3_errmsg($0)) }
-                ?? "sqlite3_open_v2 returned \(rc)"
-            if let h = handle { sqlite3_close_v2(h) }
-            throw NoteStoreReaderError.databaseNotAccessible(
-                "Cannot open \(path): \(msg). On macOS, grant Full Disk " +
-                "Access to the calling binary in System Settings → " +
-                "Privacy & Security → Full Disk Access."
-            )
+        var handle = try rawOpen(path: path, flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX)
+        // Notes.app writes through WAL while we read. A checkpoint or
+        // recovery can briefly hold a lock; wait up to a second rather
+        // than failing (or, before step-error checking, truncating) on
+        // the first SQLITE_BUSY.
+        sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
+        // sqlite3_open_v2 is lazy; touch the schema to surface the
+        // read-only + missing `-wal` case here rather than mid-query.
+        if sqlite3_exec(handle, "PRAGMA schema_version", nil, nil, nil) == SQLITE_CANTOPEN {
+            sqlite3_close_v2(handle)
+            handle = try rawOpen(path: path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX)
+            sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
         }
-        // Enforce read-only at the connection level. This is the guardrail
-        // that keeps a READWRITE handle from ever mutating the store, so a
-        // failure here must not be swallowed — an unchecked failure would
-        // leave a silently-writable handle.
+        // Belt and braces on top of SQLITE_OPEN_READONLY: reject SQL
+        // writes at the connection level too. A failure here must not be
+        // swallowed — refuse the handle rather than assume it's safe.
         let pragmaRC = sqlite3_exec(handle, "PRAGMA query_only = 1", nil, nil, nil)
         guard pragmaRC == SQLITE_OK else {
             let msg = String(cString: sqlite3_errmsg(handle))
@@ -133,11 +146,6 @@ public actor NoteStoreReader {
                 "to return a writable handle to the Notes store."
             )
         }
-        // Notes.app writes through WAL while we read. A checkpoint or
-        // recovery can briefly hold a lock; wait up to a second rather
-        // than failing (or, before step-error checking, truncating) on
-        // the first SQLITE_BUSY.
-        sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
         let fnRC = sqlite3_create_function_v2(
             handle, containsFunctionName, 2,
             SQLITE_UTF8 | SQLITE_DETERMINISTIC, nil,
@@ -148,6 +156,23 @@ public actor NoteStoreReader {
             sqlite3_close_v2(handle)
             throw NoteStoreReaderError.sqliteError(
                 "Failed to register \(containsFunctionName): \(msg)"
+            )
+        }
+        return handle
+    }
+
+    /// `sqlite3_open_v2` with the Full Disk Access remediation hint on failure.
+    private static func rawOpen(path: String, flags: Int32) throws -> OpaquePointer {
+        var handle: OpaquePointer?
+        let rc = sqlite3_open_v2(path, &handle, flags, nil)
+        guard rc == SQLITE_OK, let handle else {
+            let msg = handle.map { String(cString: sqlite3_errmsg($0)) }
+                ?? "sqlite3_open_v2 returned \(rc)"
+            if let h = handle { sqlite3_close_v2(h) }
+            throw NoteStoreReaderError.databaseNotAccessible(
+                "Cannot open \(path): \(msg). On macOS, grant Full Disk " +
+                "Access to the calling binary in System Settings → " +
+                "Privacy & Security → Full Disk Access."
             )
         }
         return handle
