@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.4](https://github.com/chrischall/swift-notes-automation/compare/v1.4.3...v1.4.4) (2026-10-09)
+
+
+### Bug Fixes
+
+* resolve low-severity audit findings ([#63](https://github.com/chrischall/swift-notes-automation/issues/63)) ([f5d18b4](https://github.com/chrischall/swift-notes-automation/commit/f5d18b47926539efe56071a91c285140bd1c2046))
+
 ## [1.4.3](https://github.com/chrischall/swift-notes-automation/compare/v1.4.2...v1.4.3) (2026-09-24)
 
 
