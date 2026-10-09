@@ -129,6 +129,15 @@ struct NoteServiceTests {
         #expect(script.contains("\u{2265} 7"))
     }
 
+    @Test("listOrSearchScript flattens snippets in-process, not with a shell per note", arguments: [nil, "milk"])
+    func listScriptNoShellPerNote(_ query: String?) {
+        let script = NoteService.listOrSearchScript(query: query, limit: 100)
+        // `do shell script` forked one `tr` per emitted note on the main thread.
+        #expect(!script.contains("do shell script"))
+        #expect(script.contains(NoteService.oneLineHandler))
+        #expect(NoteService.oneLineHandler.contains("text item delimiters to {tab, linefeed, return}"))
+    }
+
     @Test("listOrSearchScript escapes double-quotes in the search query")
     func searchScriptEscapesQuery() {
         let script = NoteService.listOrSearchScript(query: "she said \"hi\"", limit: 10)

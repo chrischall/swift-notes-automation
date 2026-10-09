@@ -691,14 +691,30 @@ public struct NoteService: Sendable {
             return out
         end tell
 
-        on oneLine(s)
-            try
-                set s to do shell script "printf %s " & quoted form of s & " | tr '\\t\\n\\r' '   '"
-            end try
-            return s
-        end oneLine\(anchorHandler)
+        \(oneLineHandler)\(anchorHandler)
         """
     }
+
+    /// AppleScript handler that flattens a string onto one line, turning
+    /// every tab, linefeed and carriage return into a space, so
+    /// ``parseNoteLines(_:)`` can split rows on newlines and fields on tabs.
+    ///
+    /// Uses AppleScript's text item delimiters in-process (restoring the
+    /// caller's delimiters afterwards) rather than `do shell script … | tr`,
+    /// which forked a shell per emitted note on the main thread.
+    static let oneLineHandler = """
+        on oneLine(s)
+            set oldTIDs to AppleScript's text item delimiters
+            try
+                set AppleScript's text item delimiters to {tab, linefeed, return}
+                set parts to text items of s
+                set AppleScript's text item delimiters to " "
+                set s to parts as text
+            end try
+            set AppleScript's text item delimiters to oldTIDs
+            return s
+        end oneLine
+        """
 
     /// Parses the tab-delimited output produced by ``listOrSearchScript(query:limit:)``.
     ///
