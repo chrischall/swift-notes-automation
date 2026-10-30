@@ -25,6 +25,11 @@ let package = Package(
 /// features that tighten the source without changing runtime behaviour.
 /// `InternalImportsByDefault` makes imports internal: files whose public
 /// API names Foundation types say `public import Foundation`.
+///
+/// `NonisolatedNonsendingByDefault` is the one that changes runtime
+/// behaviour: a nonisolated `async` function now runs on its caller's
+/// actor. Anything that must leave that actor is marked `@concurrent` —
+/// see `AppleScriptRunner.run(source:)`.
 var swiftSettings: [SwiftSetting] {
     [
         .enableUpcomingFeature("ExistentialAny"),
@@ -32,5 +37,6 @@ var swiftSettings: [SwiftSetting] {
         .enableUpcomingFeature("InternalImportsByDefault"),
         .enableUpcomingFeature("InferIsolatedConformances"),
         .enableUpcomingFeature("ImmutableWeakCaptures"),
+        .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
     ]
 }
