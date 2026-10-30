@@ -23,9 +23,14 @@ let package = Package(
 
 /// Swift 6 language mode (complete strict concurrency) plus upcoming
 /// features that tighten the source without changing runtime behaviour.
+/// `InternalImportsByDefault` makes imports internal: files whose public
+/// API names Foundation types say `public import Foundation`.
 var swiftSettings: [SwiftSetting] {
     [
         .enableUpcomingFeature("ExistentialAny"),
         .enableUpcomingFeature("MemberImportVisibility"),
+        .enableUpcomingFeature("InternalImportsByDefault"),
+        .enableUpcomingFeature("InferIsolatedConformances"),
+        .enableUpcomingFeature("ImmutableWeakCaptures"),
     ]
 }

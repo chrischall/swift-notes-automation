@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Errors surfaced by ``NoteService`` operations.
 public enum NoteServiceError: Error, Equatable, Sendable {

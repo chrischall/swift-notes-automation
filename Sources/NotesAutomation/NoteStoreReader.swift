@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import SQLite3
 
 /// High-performance read-only view of Notes.app's Core Data store.
