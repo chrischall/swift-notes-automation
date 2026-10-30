@@ -56,8 +56,9 @@ import SQLite3
 ///
 /// ## Schema assumptions
 ///
-/// The reader targets the Notes schema used by macOS 13+ (Ventura,
-/// Sonoma, Sequoia, Tahoe). Key assumptions:
+/// The reader targets the Notes schema Apple has shipped since macOS 13
+/// (Ventura) and still ships on macOS 26 (Tahoe), this package's minimum.
+/// Key assumptions:
 /// - Main table is `ZICCLOUDSYNCINGOBJECT` with Core Data column prefixes.
 /// - Notes are the entity named `ICNote` in `Z_PRIMARYKEY`.
 /// - Folders are `ICFolder`.
