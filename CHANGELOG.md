@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/chrischall/swift-notes-automation/compare/v1.4.4...v2.0.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* the package now requires macOS 26 (`.macOS(.v26)`) and swift-tools-version 6.4. Consumers on macOS 14–25 must stay on 1.x.
+
+### Features
+
+* require macOS 26 and adopt typed throws ([#68](https://github.com/chrischall/swift-notes-automation/issues/68)) ([6f26767](https://github.com/chrischall/swift-notes-automation/commit/6f26767d2c047c24033a09bcce9057da452fd139))
+
 ## [1.4.4](https://github.com/chrischall/swift-notes-automation/compare/v1.4.3...v1.4.4) (2026-10-09)
 
 
