@@ -1,29 +1,39 @@
 import Foundation
 import NotesAutomation
+import Synchronization
 
 /// In-memory AppleScriptRunner for tests. Records every script it was asked
 /// to run, and replies with a queued result or a constant.
-final class FakeAppleScriptRunner: AppleScriptRunner, @unchecked Sendable {
-    /// Responses to hand out in FIFO order. When empty, returns
-    /// `defaultResponse`.
-    var responses: [Result<String, AppleScriptError>] = []
-    var defaultResponse: Result<String, AppleScriptError> = .success("")
+///
+/// Genuinely `Sendable`: all mutable state lives behind a `Mutex`, so a
+/// shared instance is safe under Swift Testing's parallel execution.
+final class FakeAppleScriptRunner: AppleScriptRunner, Sendable {
+    private struct State {
+        /// Responses to hand out in FIFO order. When empty, `run` returns
+        /// `defaultResponse`.
+        var responses: [Result<String, AppleScriptError>] = []
+        var defaultResponse: Result<String, AppleScriptError> = .success("")
+        var calls: [String] = []
+    }
 
-    private(set) var calls: [String] = []
+    private let state = Mutex(State())
+
+    /// Every script source passed to ``run(source:)``, in call order.
+    var calls: [String] { state.withLock { $0.calls } }
 
     func run(source: String) async throws -> String {
-        calls.append(source)
-        let r = responses.isEmpty ? defaultResponse : responses.removeFirst()
-        switch r {
-        case .success(let s): return s
-        case .failure(let e): throw e
+        let result = state.withLock { state in
+            state.calls.append(source)
+            return state.responses.isEmpty ? state.defaultResponse : state.responses.removeFirst()
         }
+        return try result.get()
     }
 
     func queue(_ result: String) {
-        responses.append(.success(result))
+        state.withLock { $0.responses.append(.success(result)) }
     }
+
     func queueError(_ msg: String) {
-        responses.append(.failure(.runtime(msg)))
+        state.withLock { $0.responses.append(.failure(.runtime(msg))) }
     }
 }
