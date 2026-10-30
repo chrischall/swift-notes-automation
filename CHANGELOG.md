@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/chrischall/swift-notes-automation/compare/v2.1.0...v2.1.1) (2026-10-30)
+
+
+### Refactor
+
+* adopt Swift 6.4 upcoming features and strict memory safety ([#73](https://github.com/chrischall/swift-notes-automation/issues/73)) ([ab0f9b0](https://github.com/chrischall/swift-notes-automation/commit/ab0f9b077cb36b66071b661c46243f3f0e069d01))
+
 ## [2.1.0](https://github.com/chrischall/swift-notes-automation/compare/v2.0.0...v2.1.0) (2026-10-30)
 
 
