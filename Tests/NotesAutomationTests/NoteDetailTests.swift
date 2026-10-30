@@ -113,6 +113,35 @@ struct NoteDetailTests {
         #expect(inUTC.modificationDate == Date(timeIntervalSince1970: 1_782_864_005))
     }
 
+    @Test("parseNoteDetail reads a wall-clock stamp on either side of a DST change in that zone's offset")
+    func parseNoteDetailHonoursDST() throws {
+        let newYork = try #require(TimeZone(identifier: "America/New_York"))
+        // 09:30 EST (UTC-5) in January, 09:30 EDT (UTC-4) in July.
+        let raw = ["id", "T", "F", "2026-01-15T09:30:00", "2026-07-15T09:30:00", "p", "h"]
+            .joined(separator: sep)
+        let d = try #require(NoteService.parseNoteDetail(raw, timeZone: newYork))
+        #expect(d.creationDate == Date(timeIntervalSince1970: 1_768_487_400))
+        #expect(d.modificationDate == Date(timeIntervalSince1970: 1_784_122_200))
+    }
+
+    @Test(
+        "parseNoteDetail leaves an unparseable date stamp nil rather than guessing",
+        arguments: [
+            "garbage",
+            "2026-01-15",
+            "2026-13-01T00:00:00",
+            "2026-01-15 09:30:00",
+            "15/01/2026 09:30:00",
+        ]
+    )
+    func parseNoteDetailRejectsBadStamp(_ stamp: String) throws {
+        let utc = try #require(TimeZone(identifier: "UTC"))
+        let raw = ["id", "T", "F", stamp, stamp, "p", "h"].joined(separator: sep)
+        let d = try #require(NoteService.parseNoteDetail(raw, timeZone: utc))
+        #expect(d.creationDate == nil)
+        #expect(d.modificationDate == nil)
+    }
+
     @Test("parseNoteDetail returns nil for output with too few fields")
     func parseMalformed() {
         #expect(NoteService.parseNoteDetail("only\u{001E}two\u{001E}fields") == nil)

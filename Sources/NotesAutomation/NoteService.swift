@@ -582,21 +582,23 @@ public struct NoteService: Sendable {
             .filter { !$0.isEmpty }
     }
 
-    /// Locale-stable parser for the `yyyy-MM-dd'T'HH:mm:ss` local-time
-    /// stamps emitted by ``getScript(id:)``'s `isoDate` handler.
+    /// Locale-stable parse strategy for the `yyyy-MM-dd'T'HH:mm:ss`
+    /// local-time stamps emitted by ``getScript(id:)``'s `isoDate` handler.
     ///
-    /// Built per parse rather than cached: AppleScript dates are
-    /// wall-clock times with no offset, so they must be read in the zone
-    /// in effect *now*. A static formatter would pin whatever zone was
-    /// current at first use and shift every date after the user changes
-    /// time zone in a long-running host. (A wall-clock time inside a DST
-    /// fall-back hour stays inherently ambiguous.)
-    static func detailDateFormatter(timeZone: TimeZone) -> DateFormatter {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        f.timeZone = timeZone
-        return f
+    /// A `Date.ISO8601FormatStyle` with no time-zone field: the stamp is
+    /// read as a wall-clock time in `timeZone`. Built per parse rather
+    /// than cached — AppleScript dates carry no offset, so they must be
+    /// read in the zone in effect *now*; a cached style would pin
+    /// whatever zone was current at first use and shift every date after
+    /// the user changes time zone in a long-running host. The style is a
+    /// cheap `Sendable` value, unlike the `DateFormatter` it replaces.
+    /// (A wall-clock time inside a DST fall-back hour stays inherently
+    /// ambiguous.)
+    static func detailDateStyle(timeZone: TimeZone) -> Date.ISO8601FormatStyle {
+        Date.ISO8601FormatStyle(timeZone: timeZone)
+            .year().month().day()
+            .dateTimeSeparator(.standard)
+            .time(includingFractionalSeconds: false)
     }
 
     /// Parses the record-separated output of ``getScript(id:)`` into a
@@ -621,15 +623,15 @@ public struct NoteService: Sendable {
         // If a body somehow contained the separator, keep every trailing
         // piece as part of the HTML rather than dropping data.
         let html = fields[6...].joined(separator: detailFieldSeparator)
-        let dates = detailDateFormatter(timeZone: timeZone)
+        let dates = detailDateStyle(timeZone: timeZone)
         return NoteDetail(
             id: fields[0],
             title: fields[1],
             folder: fields[2],
             plainText: fields[5],
             html: html,
-            creationDate: fields[3].nonEmpty.flatMap { dates.date(from: $0) },
-            modificationDate: fields[4].nonEmpty.flatMap { dates.date(from: $0) }
+            creationDate: fields[3].nonEmpty.flatMap { try? dates.parse($0) },
+            modificationDate: fields[4].nonEmpty.flatMap { try? dates.parse($0) }
         )
     }
 
