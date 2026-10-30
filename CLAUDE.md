@@ -9,7 +9,7 @@ Swift 6 library that exposes Apple Notes.app on macOS via two complementary path
 - **`NoteService`** — AppleScript-backed (`NSAppleScript`). Handles all writes (create/update/delete) and reads via Notes.app (list/search/get/folders). Goes through CloudKit so iCloud sync stays coherent.
 - **`NoteStoreReader`** — direct read-only SQLite access to `NoteStore.sqlite`. ~100× faster for list/search/folders. Requires Full Disk Access.
 
-Target: macOS 14+. Zero external dependencies (SQLite is the system `SQLite3` module; no SPM dep needed). Strict concurrency is on (all public types are `Sendable`).
+Target: macOS 26+ (`swift-tools-version: 6.4`, Swift 6 language mode with the `ExistentialAny` and `MemberImportVisibility` upcoming features). Zero external dependencies (SQLite is the system `SQLite3` module; no SPM dep needed). Strict concurrency is on (all public types are `Sendable`).
 
 ## Commands
 
