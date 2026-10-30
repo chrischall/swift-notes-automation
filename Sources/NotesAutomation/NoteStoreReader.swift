@@ -69,8 +69,9 @@ import SQLite3
 public actor NoteStoreReader {
     /// Default location of Notes.app's database on macOS.
     public static var defaultDatabasePath: String {
-        let home = NSHomeDirectory()
-        return "\(home)/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"
+        URL.homeDirectory
+            .appending(path: "Library/Group Containers/group.com.apple.notes/NoteStore.sqlite")
+            .path(percentEncoded: false)
     }
 
     private let path: String

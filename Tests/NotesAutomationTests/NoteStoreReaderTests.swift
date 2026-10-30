@@ -26,6 +26,12 @@ struct NoteStoreReaderTests {
 
     // MARK: - open / init
 
+    @Test("defaultDatabasePath points at Notes' group container under the home directory")
+    func defaultPath() {
+        #expect(NoteStoreReader.defaultDatabasePath ==
+            NSHomeDirectory() + "/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite")
+    }
+
     @Test("init throws databaseNotAccessible for a non-existent path")
     func initMissingPath() async throws {
         #expect(throws: NoteStoreReaderError.self) {
