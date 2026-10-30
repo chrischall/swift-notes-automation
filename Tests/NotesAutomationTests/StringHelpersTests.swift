@@ -1,5 +1,5 @@
-import Testing
 @testable import NotesAutomation
+import Testing
 
 @Suite("String helpers")
 struct StringHelpersTests {

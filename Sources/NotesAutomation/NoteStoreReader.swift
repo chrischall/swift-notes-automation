@@ -104,7 +104,7 @@ public actor NoteStoreReader {
         // `x-coredata://…` ids compatible with NoteService (which returns
         // this format from AppleScript). Best-effort — if the column
         // isn't there we fall back to ZIDENTIFIER.
-        self.storeUUID = unsafe Self.readStoreUUID(db: handle)
+        storeUUID = unsafe Self.readStoreUUID(db: handle)
     }
 
     /// Opens a fresh SQLite handle for one query. Callers must `sqlite3_close_v2`
@@ -148,7 +148,7 @@ public actor NoteStoreReader {
             unsafe sqlite3_close_v2(handle)
             throw NoteStoreReaderError.databaseNotAccessible(
                 "Failed to set PRAGMA query_only on \(path): \(msg). Refusing " +
-                "to return a writable handle to the Notes store."
+                    "to return a writable handle to the Notes store."
             )
         }
         let fnRC = unsafe sqlite3_create_function_v2(
@@ -173,11 +173,13 @@ public actor NoteStoreReader {
         guard rc == SQLITE_OK, let handle = unsafe handle else {
             let msg = unsafe handle.map { unsafe String(cString: sqlite3_errmsg($0)) }
                 ?? "sqlite3_open_v2 returned \(rc)"
-            if let h = unsafe handle { unsafe sqlite3_close_v2(h) }
+            if let h = unsafe handle {
+                unsafe sqlite3_close_v2(h)
+            }
             throw NoteStoreReaderError.databaseNotAccessible(
                 "Cannot open \(path): \(msg). On macOS, grant Full Disk " +
-                "Access to the calling binary in System Settings → " +
-                "Privacy & Security → Full Disk Access."
+                    "Access to the calling binary in System Settings → " +
+                    "Privacy & Security → Full Disk Access."
             )
         }
         return unsafe handle
@@ -253,14 +255,14 @@ public actor NoteStoreReader {
         // Folders are the `ICFolder` entity. Same trash exclusion the note
         // query uses: skip ZFOLDERTYPE = 1 and `TrashFolder-*` identifiers.
         let sql = """
-            SELECT f.ZTITLE2
-            FROM ZICCLOUDSYNCINGOBJECT f
-            JOIN Z_PRIMARYKEY pk ON f.Z_ENT = pk.Z_ENT AND pk.Z_NAME = 'ICFolder'
-            WHERE COALESCE(f.ZFOLDERTYPE, 0) <> 1
-              AND COALESCE(f.ZIDENTIFIER, '') NOT LIKE 'TrashFolder-%'
-              AND f.ZTITLE2 IS NOT NULL
-            ORDER BY LOWER(f.ZTITLE2)
-            """
+        SELECT f.ZTITLE2
+        FROM ZICCLOUDSYNCINGOBJECT f
+        JOIN Z_PRIMARYKEY pk ON f.Z_ENT = pk.Z_ENT AND pk.Z_NAME = 'ICFolder'
+        WHERE COALESCE(f.ZFOLDERTYPE, 0) <> 1
+          AND COALESCE(f.ZIDENTIFIER, '') NOT LIKE 'TrashFolder-%'
+          AND f.ZTITLE2 IS NOT NULL
+        ORDER BY LOWER(f.ZTITLE2)
+        """
         var stmt: OpaquePointer?
         let rc = unsafe sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
         guard rc == SQLITE_OK, let stmt = unsafe stmt else {
@@ -272,7 +274,9 @@ public actor NoteStoreReader {
         var results: [String] = []
         var stepRC = unsafe sqlite3_step(stmt)
         while stepRC == SQLITE_ROW {
-            if let name = unsafe columnText(stmt, 0) { results.append(name) }
+            if let name = unsafe columnText(stmt, 0) {
+                results.append(name)
+            }
             stepRC = unsafe sqlite3_step(stmt)
         }
         try unsafe Self.requireDone(stepRC, db: db)
@@ -300,15 +304,15 @@ public actor NoteStoreReader {
     ///   identifier is a belt-and-suspenders check for accounts where
     ///   `ZFOLDERTYPE` isn't set.
     static let baseQuery = """
-        SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZSNIPPET,
-               COALESCE(f.ZTITLE2, '') AS folder_name
-        FROM ZICCLOUDSYNCINGOBJECT n
-        JOIN Z_PRIMARYKEY pk ON n.Z_ENT = pk.Z_ENT AND pk.Z_NAME = 'ICNote'
-        LEFT JOIN ZICCLOUDSYNCINGOBJECT f ON n.ZFOLDER = f.Z_PK
-        WHERE COALESCE(n.ZMARKEDFORDELETION, 0) = 0
-          AND COALESCE(f.ZFOLDERTYPE, 0) <> 1
-          AND COALESCE(f.ZIDENTIFIER, '') NOT LIKE 'TrashFolder-%'
-        """
+    SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZSNIPPET,
+           COALESCE(f.ZTITLE2, '') AS folder_name
+    FROM ZICCLOUDSYNCINGOBJECT n
+    JOIN Z_PRIMARYKEY pk ON n.Z_ENT = pk.Z_ENT AND pk.Z_NAME = 'ICNote'
+    LEFT JOIN ZICCLOUDSYNCINGOBJECT f ON n.ZFOLDER = f.Z_PK
+    WHERE COALESCE(n.ZMARKEDFORDELETION, 0) = 0
+      AND COALESCE(f.ZFOLDERTYPE, 0) <> 1
+      AND COALESCE(f.ZIDENTIFIER, '') NOT LIKE 'TrashFolder-%'
+    """
 
     private func runNoteQuery(
         where extraPredicate: String,
@@ -419,9 +423,10 @@ private func notesAutomationContains(
     _ argc: Int32,
     _ argv: UnsafeMutablePointer<OpaquePointer?>?
 ) {
-    guard argc == 2, let argv = unsafe argv,
-          let haystackPtr = unsafe sqlite3_value_text(argv[0]),
-          let needlePtr = unsafe sqlite3_value_text(argv[1]) else {
+    guard argc == 2, let args = unsafe argv,
+          let haystackPtr = unsafe sqlite3_value_text(args[0]),
+          let needlePtr = unsafe sqlite3_value_text(args[1])
+    else {
         unsafe sqlite3_result_int(context, 0)
         return
     }
@@ -450,8 +455,8 @@ public enum NoteStoreReaderError: Error, Equatable, Sendable {
 extension NoteStoreReaderError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .databaseNotAccessible(let m): return "NoteStore not accessible: \(m)"
-        case .sqliteError(let m): return "NoteStore SQLite error: \(m)"
+        case let .databaseNotAccessible(m): "NoteStore not accessible: \(m)"
+        case let .sqliteError(m): "NoteStore SQLite error: \(m)"
         }
     }
 }

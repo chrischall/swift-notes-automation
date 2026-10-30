@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// End-to-end tests against the user's real Notes.app.
 ///

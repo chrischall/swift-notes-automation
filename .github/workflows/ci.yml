@@ -51,6 +51,9 @@ jobs:
       - name: Test
         if: steps.gate.outputs.run == 'true'
         run: swift test
+      - name: SwiftFormat lint
+        if: steps.gate.outputs.run == 'true'
+        run: swiftformat Sources Tests --lint
 
       # Flip ci-gated to the real outcome. `always()` so a failed build posts
       # `failure` (merge stays blocked, checks UI explains why) instead of

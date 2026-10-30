@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 @Suite("NoteService")
 struct NoteServiceTests {
@@ -138,7 +138,10 @@ struct NoteServiceTests {
         #expect(NoteService.oneLineHandler.contains("text item delimiters to {tab, linefeed, return}"))
     }
 
-    @Test("listOrSearchScript flattens title and folder too, so a tab in either can't shift fields", arguments: [nil, "milk"])
+    @Test(
+        "listOrSearchScript flattens title and folder too, so a tab in either can't shift fields",
+        arguments: [nil, "milk"]
+    )
     func listScriptFlattensTitleAndFolder(_ query: String?) {
         let script = NoteService.listOrSearchScript(query: query, limit: 10)
         #expect(script.contains(

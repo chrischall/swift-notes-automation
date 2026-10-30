@@ -61,10 +61,10 @@ extension AppleScriptError: LocalizedError {
     /// Human-readable description suitable for logs and user display.
     public var errorDescription: String? {
         switch self {
-        case .runtime(let message):
-            return "AppleScript runtime error: \(message)"
-        case .compile(let message):
-            return "AppleScript compile error: \(message)"
+        case let .runtime(message):
+            "AppleScript runtime error: \(message)"
+        case let .compile(message):
+            "AppleScript compile error: \(message)"
         }
     }
 }

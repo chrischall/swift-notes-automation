@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// The pure body-windowing helpers consumers use to page a full note body
 /// and to re-anchor a preview around a search match — plus the generated
@@ -63,12 +63,12 @@ struct BodyExcerptTests {
     // MARK: - matchExcerpt
 
     @Test("matchExcerpt anchors the window around a deep match with ellipses")
-    func excerptAnchors() {
+    func excerptAnchors() throws {
         let body = String(repeating: "filler ", count: 100)
             + "Finn: bring cleats"
             + String(repeating: " tail", count: 100)
         let excerpt = NoteService.matchExcerpt(query: "Finn", in: body)
-        let e = try! #require(excerpt)
+        let e = try #require(excerpt)
         #expect(e.contains("Finn: bring cleats"))
         #expect(e.hasPrefix("…"))
         #expect(e.hasSuffix("…"))
@@ -93,17 +93,17 @@ struct BodyExcerptTests {
     }
 
     @Test("matchExcerpt near the start has no leading ellipsis")
-    func excerptAtStart() {
+    func excerptAtStart() throws {
         let body = "Finn first" + String(repeating: " tail", count: 200)
-        let e = try! #require(NoteService.matchExcerpt(query: "Finn", in: body))
+        let e = try #require(NoteService.matchExcerpt(query: "Finn", in: body))
         #expect(!e.hasPrefix("…"))
         #expect(e.hasSuffix("…"))
     }
 
     @Test("matchExcerpt survives emoji before the match")
-    func excerptEmoji() {
+    func excerptEmoji() throws {
         let body = String(repeating: "🎉", count: 400) + " Finn here"
-        let e = try! #require(NoteService.matchExcerpt(query: "Finn", in: body))
+        let e = try #require(NoteService.matchExcerpt(query: "Finn", in: body))
         #expect(e.contains("Finn here"))
     }
 

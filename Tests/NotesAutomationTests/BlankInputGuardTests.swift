@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// "Empty or whitespace-only" must include newlines and tabs: a query of
 /// `"\n"` otherwise slips past the guard and scans every note's body.

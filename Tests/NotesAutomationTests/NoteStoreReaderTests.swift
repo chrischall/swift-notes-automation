@@ -1,11 +1,10 @@
 import Foundation
+@testable import NotesAutomation
 import SQLite3
 import Testing
-@testable import NotesAutomation
 
 @Suite("NoteStoreReader")
 struct NoteStoreReaderTests {
-
     // MARK: - setup helper
 
     /// Builds a fresh fixture DB and hands the caller both the reader
@@ -18,7 +17,8 @@ struct NoteStoreReaderTests {
         _ body: (NoteStoreReader) async throws -> Void
     ) async throws {
         let path = try NoteStoreFixture.create(
-            folders: folders, notes: notes, storeUUID: storeUUID)
+            folders: folders, notes: notes, storeUUID: storeUUID
+        )
         defer { try? FileManager.default.removeItem(atPath: path) }
         let reader = try NoteStoreReader(path: path)
         try await body(reader)
@@ -33,7 +33,7 @@ struct NoteStoreReaderTests {
     }
 
     @Test("init throws databaseNotAccessible for a non-existent path")
-    func initMissingPath() async throws {
+    func initMissingPath() throws {
         #expect(throws: NoteStoreReaderError.self) {
             _ = try NoteStoreReader(path: "/nonexistent/notes.sqlite")
         }
@@ -145,7 +145,11 @@ struct NoteStoreReaderTests {
         // cross-connection freshness, the same shape Notes.app has.
         var mutator: OpaquePointer?
         #expect(unsafe sqlite3_open(path, &mutator) == SQLITE_OK)
-        defer { if let m = unsafe mutator { unsafe sqlite3_close_v2(m) } }
+        defer {
+            if let m = unsafe mutator {
+                unsafe sqlite3_close_v2(m)
+            }
+        }
         let execRC = unsafe sqlite3_exec(
             mutator,
             "UPDATE ZICCLOUDSYNCINGOBJECT SET ZMARKEDFORDELETION = 1 WHERE Z_PK = 1",
@@ -203,7 +207,7 @@ struct NoteStoreReaderTests {
     func searchLimit() async throws {
         // Seed multiple notes that all match "recipe" to prove limit works.
         let folders: [NoteStoreFixture.SeedFolder] = [.init(pk: 100, title: "Recipes")]
-        let notes: [NoteStoreFixture.SeedNote] = (1...5).map { i in
+        let notes: [NoteStoreFixture.SeedNote] = (1 ... 5).map { i in
             .init(pk: i, identifier: "UUID-\(i)",
                   title: "Recipe \(i)", snippet: "cookie recipe \(i)",
                   folderPK: 100, markedForDeletion: false,

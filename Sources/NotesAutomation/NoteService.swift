@@ -20,10 +20,10 @@ extension NoteServiceError: LocalizedError {
     /// Human-readable description suitable for logs and user display.
     public var errorDescription: String? {
         switch self {
-        case .scriptFailure(let message):
-            return "Notes script failure: \(message)"
-        case .invalidInput(let message):
-            return "Invalid input: \(message)"
+        case let .scriptFailure(message):
+            "Notes script failure: \(message)"
+        case let .invalidInput(message):
+            "Invalid input: \(message)"
         }
     }
 }
@@ -382,8 +382,12 @@ public struct NoteService: Sendable {
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        if start > 0 { text = "…" + text }
-        if end < total { text += "…" }
+        if start > 0 {
+            text = "…" + text
+        }
+        if end < total {
+            text += "…"
+        }
         return text
     }
 
@@ -493,18 +497,18 @@ public struct NoteService: Sendable {
     /// containing the separator would otherwise shift every later field
     /// (dates, plain text, HTML) in ``parseNoteDetail(_:)``.
     static let noSeparatorHandler = """
-        on noSeparator(s)
-            set oldTIDs to AppleScript's text item delimiters
-            try
-                set AppleScript's text item delimiters to (ASCII character 30)
-                set parts to text items of s
-                set AppleScript's text item delimiters to " "
-                set s to parts as text
-            end try
-            set AppleScript's text item delimiters to oldTIDs
-            return s
-        end noSeparator
-        """
+    on noSeparator(s)
+        set oldTIDs to AppleScript's text item delimiters
+        try
+            set AppleScript's text item delimiters to (ASCII character 30)
+            set parts to text items of s
+            set AppleScript's text item delimiters to " "
+            set s to parts as text
+        end try
+        set AppleScript's text item delimiters to oldTIDs
+        return s
+    end noSeparator
+    """
 
     /// Constructs an update-note-by-id AppleScript.
     ///
@@ -635,7 +639,6 @@ public struct NoteService: Sendable {
         )
     }
 
-
     /// Constructs a list-or-search AppleScript.
     ///
     /// When `query` is `nil` or empty, the script returns the most
@@ -742,18 +745,18 @@ public struct NoteService: Sendable {
     /// caller's delimiters afterwards) rather than `do shell script … | tr`,
     /// which forked a shell per emitted note on the main thread.
     static let oneLineHandler = """
-        on oneLine(s)
-            set oldTIDs to AppleScript's text item delimiters
-            try
-                set AppleScript's text item delimiters to {tab, linefeed, return}
-                set parts to text items of s
-                set AppleScript's text item delimiters to " "
-                set s to parts as text
-            end try
-            set AppleScript's text item delimiters to oldTIDs
-            return s
-        end oneLine
-        """
+    on oneLine(s)
+        set oldTIDs to AppleScript's text item delimiters
+        try
+            set AppleScript's text item delimiters to {tab, linefeed, return}
+            set parts to text items of s
+            set AppleScript's text item delimiters to " "
+            set s to parts as text
+        end try
+        set AppleScript's text item delimiters to oldTIDs
+        return s
+    end oneLine
+    """
 
     /// Parses the tab-delimited output produced by ``listOrSearchScript(query:limit:)``.
     ///

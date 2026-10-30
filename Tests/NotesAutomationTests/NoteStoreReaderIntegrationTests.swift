@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// End-to-end tests for ``NoteStoreReader`` against the user's real
 /// `NoteStore.sqlite`.
@@ -23,7 +23,6 @@ import Testing
 /// respects basic invariants (non-negative count, limit honored).
 @Suite("NoteStoreReader integration")
 struct NoteStoreReaderIntegrationTests {
-
     @Test(
         "list returns well-shaped notes from the real NoteStore",
         .disabled(if: ProcessInfo.processInfo.environment["NOTES_SQLITE_INTEGRATION"] != "1",

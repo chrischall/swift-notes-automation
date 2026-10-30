@@ -1,6 +1,6 @@
 import Foundation
 
-extension String {
+public extension String {
     /// Returns `self` when it is non-empty, otherwise `nil`.
     ///
     /// Useful for precedence chains with the nil-coalescing operator —
@@ -15,5 +15,5 @@ extension String {
     ///
     /// Note that "non-empty" uses `String.isEmpty`, so a string of just
     /// whitespace is still considered non-empty.
-    public var nonEmpty: String? { isEmpty ? nil : self }
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

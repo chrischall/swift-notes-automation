@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Live tests for `NSAppleScriptRunner` that exercise the real
 /// `NSAppleScript` bridge.
@@ -65,7 +65,7 @@ struct NSAppleScriptRunnerTests {
         let runner = NSAppleScriptRunner()
         let source = "tell application \"Notes\" to return (count of folders) as string"
 
-        _ = try await runner.run(source: source)  // warm-up: launch + first AE
+        _ = try await runner.run(source: source) // warm-up: launch + first AE
 
         let started = ContinuousClock.now
         let result = try await runner.run(source: source)
@@ -86,8 +86,8 @@ struct NSAppleScriptRunnerTests {
         let runner = NSAppleScriptRunner()
         let source = NoteService.oneLineHandler + """
 
-            return my oneLine("a" & tab & "b" & linefeed & "c" & return & "d é🎉") & "|" & my oneLine("") & "|" & (AppleScript's text item delimiters as text)
-            """
+        return my oneLine("a" & tab & "b" & linefeed & "c" & return & "d é🎉") & "|" & my oneLine("") & "|" & (AppleScript's text item delimiters as text)
+        """
         let result = try await runner.run(source: source)
         // Flattened, empty input survives, and the delimiters are restored.
         #expect(result == "a b c d é🎉||")
@@ -99,8 +99,8 @@ struct NSAppleScriptRunnerTests {
         let runner = NSAppleScriptRunner()
         let source = NoteService.noSeparatorHandler + """
 
-            return my noSeparator("a" & (ASCII character 30) & "b") & "|" & my noSeparator("") & "|" & (AppleScript's text item delimiters as text)
-            """
+        return my noSeparator("a" & (ASCII character 30) & "b") & "|" & my noSeparator("") & "|" & (AppleScript's text item delimiters as text)
+        """
         let result = try await runner.run(source: source)
         #expect(result == "a b||")
     }
@@ -123,7 +123,7 @@ struct NSAppleScriptRunnerTests {
             _ = try await runner.run(source: "error \"\(distinctive)\"")
             Issue.record("expected the script to throw")
         } catch {
-            guard case .runtime(let message) = error else {
+            guard case let .runtime(message) = error else {
                 Issue.record("expected .runtime, got \(error)")
                 return
             }
@@ -174,9 +174,9 @@ struct NSAppleScriptRunnerThreadAffinityTests {
 
     @Test("the hop reaches the main thread from a background executor")
     func executesOnMainThreadFromBackground() async {
-        // `@concurrent` pins the caller to the global executor, so the
-        // hop is exercised for real rather than inherited from a
-        // main-actor caller under NonisolatedNonsendingByDefault.
+        /// `@concurrent` pins the caller to the global executor, so the
+        /// hop is exercised for real rather than inherited from a
+        /// main-actor caller under NonisolatedNonsendingByDefault.
         @concurrent func hopFromBackground() async -> (before: Bool, inside: Bool) {
             let before = Self.onMainThreadNow()
             let inside = await NSAppleScriptRunner.onMainThread { Thread.isMainThread }
