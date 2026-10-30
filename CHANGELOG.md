@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/chrischall/swift-notes-automation/compare/v2.0.0...v2.1.0) (2026-10-30)
+
+
+### Features
+
+* require macOS 27.2 ([#70](https://github.com/chrischall/swift-notes-automation/issues/70)) ([2ce2f86](https://github.com/chrischall/swift-notes-automation/commit/2ce2f86b6af932c5af5d2760218af2d055103a66))
+
 ## [2.0.0](https://github.com/chrischall/swift-notes-automation/compare/v1.4.4...v2.0.0) (2026-10-30)
 
 
