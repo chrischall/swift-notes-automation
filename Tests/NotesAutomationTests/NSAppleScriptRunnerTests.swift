@@ -172,6 +172,30 @@ struct NSAppleScriptRunnerThreadAffinityTests {
         )
     }
 
+    @Test("the hop reaches the main thread from a background executor")
+    func executesOnMainThreadFromBackground() async {
+        // `@concurrent` pins the caller to the global executor, so the
+        // hop is exercised for real rather than inherited from a
+        // main-actor caller under NonisolatedNonsendingByDefault.
+        @concurrent func hopFromBackground() async -> (before: Bool, inside: Bool) {
+            let before = Self.onMainThreadNow()
+            let inside = await NSAppleScriptRunner.onMainThread { Thread.isMainThread }
+            return (before, inside)
+        }
+        let result = await hopFromBackground()
+        #expect(!result.before)
+        #expect(result.inside)
+    }
+
+    @Test("the hop reaches the main thread from the main actor")
+    @MainActor
+    func executesOnMainThreadFromMainActor() async {
+        let ranOnMain = await NSAppleScriptRunner.onMainThread { Thread.isMainThread }
+        #expect(ranOnMain)
+    }
+
+    private static func onMainThreadNow() -> Bool { Thread.isMainThread }
+
     @Test("the result of the main-thread hop reaches the caller")
     func propagatesResult() async {
         let value = await NSAppleScriptRunner.onMainThread { 6 * 7 }

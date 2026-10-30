@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// A type that can execute AppleScript source and return its scalar result.
 ///
@@ -24,7 +24,13 @@ public protocol AppleScriptRunner: Sendable {
     ///   the script executes an `error "…"` statement.
     ///   ``AppleScriptError/compile(_:)`` when `source` cannot be
     ///   compiled into an executable script.
-    func run(source: String) async throws -> String
+    ///
+    /// `@concurrent`: a call through this requirement always leaves the
+    /// caller's actor, whatever isolation the conforming method has. A
+    /// runner may block for the whole script (shelling out to
+    /// `osascript`, say), and that must never stall a main-actor caller.
+    /// ``NSAppleScriptRunner`` then hops to the main thread itself.
+    @concurrent func run(source: String) async throws -> String
 }
 
 /// Errors surfaced by an ``AppleScriptRunner`` execution.

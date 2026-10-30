@@ -9,7 +9,11 @@ Swift 6 library that exposes Apple Notes.app on macOS via two complementary path
 - **`NoteService`** — AppleScript-backed (`NSAppleScript`). Handles all writes (create/update/delete) and reads via Notes.app (list/search/get/folders). Goes through CloudKit so iCloud sync stays coherent.
 - **`NoteStoreReader`** — direct read-only SQLite access to `NoteStore.sqlite`. ~100× faster for list/search/folders. Requires Full Disk Access.
 
-Target: macOS 27.2+ (`swift-tools-version: 6.4`, Swift 6 language mode with the `ExistentialAny` and `MemberImportVisibility` upcoming features). Zero external dependencies (SQLite is the system `SQLite3` module; no SPM dep needed). Strict concurrency is on (all public types are `Sendable`).
+Target: macOS 27.2+ (`swift-tools-version: 6.4`, Swift 6 language mode with every 6.4 upcoming feature — `ExistentialAny`, `MemberImportVisibility`, `InternalImportsByDefault`, `InferIsolatedConformances`, `ImmutableWeakCaptures`, `NonisolatedNonsendingByDefault` — plus `.strictMemorySafety()`). Zero external dependencies (SQLite is the system `SQLite3` module; no SPM dep needed). Strict concurrency is on (all public types are `Sendable`).
+
+- `InternalImportsByDefault`: a file whose public API mentions a Foundation type (`LocalizedError`, `Date`, …) needs `public import Foundation`; `SQLite3` stays internal and must never leak into public API.
+- `NonisolatedNonsendingByDefault`: a nonisolated `async` function runs on its **caller's** actor. `AppleScriptRunner.run(source:)` is `@concurrent` so a (possibly blocking) runner never runs on a main-actor caller; `RunnerIsolationTests` pins that. `NoteService`'s methods only build script strings and parse output, so they inherit the caller's actor. `NoteStoreReader` is an actor, so its SQLite work is unaffected.
+- `StrictMemorySafety`: every SQLite C call and `OpaquePointer` use is marked `unsafe` — keep it that way when adding queries; the build must stay warning-free.
 
 ## Commands
 

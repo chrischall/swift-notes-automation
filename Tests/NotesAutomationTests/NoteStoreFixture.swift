@@ -90,18 +90,18 @@ enum NoteStoreFixture {
             "notes-fixture-\(UUID().uuidString).sqlite"
 
         var db: OpaquePointer?
-        guard sqlite3_open(path, &db) == SQLITE_OK, let db else {
+        guard unsafe sqlite3_open(path, &db) == SQLITE_OK, let db = unsafe db else {
             throw FixtureError.openFailed(path)
         }
-        defer { sqlite3_close_v2(db) }
+        defer { unsafe sqlite3_close_v2(db) }
 
-        try exec(db, schema)
+        try unsafe exec(db, schema)
 
         // Z_PRIMARYKEY rows — 1=ICNote, 2=ICFolder.
-        try exec(db, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME) VALUES (1, 'ICNote'), (2, 'ICFolder');")
+        try unsafe exec(db, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME) VALUES (1, 'ICNote'), (2, 'ICFolder');")
 
         if let storeUUID {
-            try exec(db, "INSERT INTO Z_METADATA (Z_VERSION, Z_UUID) VALUES (1, '\(storeUUID)');")
+            try unsafe exec(db, "INSERT INTO Z_METADATA (Z_VERSION, Z_UUID) VALUES (1, '\(storeUUID)');")
         }
 
         for f in folders {
@@ -111,7 +111,7 @@ enum NoteStoreFixture {
                 (Z_PK, Z_ENT, ZTITLE2, ZFOLDERTYPE, ZIDENTIFIER)
                 VALUES (\(f.pk), 2, '\(escape(f.title))', \(f.folderType), \(idVal));
                 """
-            try exec(db, sql)
+            try unsafe exec(db, sql)
         }
 
         for n in notes {
@@ -125,7 +125,7 @@ enum NoteStoreFixture {
                         '\(escape(n.title))', '\(escape(n.snippet))',
                         \(folder), \(deleted), \(n.modificationDate));
                 """
-            try exec(db, sql)
+            try unsafe exec(db, sql)
         }
 
         return path
@@ -172,10 +172,10 @@ enum NoteStoreFixture {
 
     private static func exec(_ db: OpaquePointer, _ sql: String) throws {
         var err: UnsafeMutablePointer<CChar>?
-        let rc = sqlite3_exec(db, sql, nil, nil, &err)
+        let rc = unsafe sqlite3_exec(db, sql, nil, nil, &err)
         if rc != SQLITE_OK {
-            let msg = err.map { String(cString: $0) } ?? "rc=\(rc)"
-            sqlite3_free(err)
+            let msg = unsafe err.map { unsafe String(cString: $0) } ?? "rc=\(rc)"
+            unsafe sqlite3_free(err)
             throw FixtureError.execFailed(msg)
         }
     }

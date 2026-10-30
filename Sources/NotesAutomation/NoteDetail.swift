@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// A note's full contents, returned from ``NoteService/get(id:)``.
 ///
