@@ -38,6 +38,9 @@ import SQLite3
 /// the file can't be opened — inspect the error message for the specific
 /// POSIX/SQLite reason.
 ///
+/// Every throwing member uses typed throws — `throws(NoteStoreReaderError)`
+/// — so callers can switch over the error without a cast.
+///
 /// ## Concurrent safety
 ///
 /// The reader opens SQLite with `SQLITE_OPEN_READONLY` (plus
@@ -91,7 +94,7 @@ public actor NoteStoreReader {
     ///   ``defaultDatabasePath``. Tests pass a fixture path here.
     /// - Throws: ``NoteStoreReaderError/databaseNotAccessible(_:)`` when
     ///   the file doesn't exist or the caller lacks permission.
-    public init(path: String = NoteStoreReader.defaultDatabasePath) throws {
+    public init(path: String = NoteStoreReader.defaultDatabasePath) throws(NoteStoreReaderError) {
         self.path = path
         let handle = try Self.openHandle(path: path)
         defer { sqlite3_close_v2(handle) }
@@ -120,7 +123,7 @@ public actor NoteStoreReader {
     /// frames to checkpoint, so that handle has nothing to write into the
     /// store (Apple's SQLite persists the empty `-wal`/`-shm` it creates,
     /// after which later queries take the read-only path).
-    private static func openHandle(path: String) throws -> OpaquePointer {
+    private static func openHandle(path: String) throws(NoteStoreReaderError) -> OpaquePointer {
         var handle = try rawOpen(path: path, flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX)
         // Notes.app writes through WAL while we read. A checkpoint or
         // recovery can briefly hold a lock; wait up to a second rather
@@ -162,7 +165,7 @@ public actor NoteStoreReader {
     }
 
     /// `sqlite3_open_v2` with the Full Disk Access remediation hint on failure.
-    private static func rawOpen(path: String, flags: Int32) throws -> OpaquePointer {
+    private static func rawOpen(path: String, flags: Int32) throws(NoteStoreReaderError) -> OpaquePointer {
         var handle: OpaquePointer?
         let rc = sqlite3_open_v2(path, &handle, flags, nil)
         guard rc == SQLITE_OK, let handle else {
@@ -199,7 +202,7 @@ public actor NoteStoreReader {
     ///     clamp to `0` (an empty result).
     ///   - offset: Number of leading notes to skip, for paging. Negative
     ///     values clamp to `0`.
-    public func list(limit: Int = 20, offset: Int = 0) async throws -> [Note] {
+    public func list(limit: Int = 20, offset: Int = 0) async throws(NoteStoreReaderError) -> [Note] {
         try runNoteQuery(where: "", args: [], limit: limit, offset: offset)
     }
 
@@ -217,7 +220,9 @@ public actor NoteStoreReader {
     ///   - limit: Maximum number of results. Negative values clamp to `0`.
     ///   - offset: Number of leading matches to skip, for paging. Negative
     ///     values clamp to `0`.
-    public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
+    public func search(
+        query: String, limit: Int = 20, offset: Int = 0
+    ) async throws(NoteStoreReaderError) -> [Note] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         // Not `LOWER(col) LIKE ?`: the system SQLite's LOWER() folds ASCII
@@ -239,7 +244,7 @@ public actor NoteStoreReader {
     ///
     /// Ordered by name (case-insensitive). Duplicate names are possible
     /// when two accounts each have a folder of the same name.
-    public func folders() async throws -> [String] {
+    public func folders() async throws(NoteStoreReaderError) -> [String] {
         let db = try Self.openHandle(path: path)
         defer { sqlite3_close_v2(db) }
 
@@ -308,7 +313,7 @@ public actor NoteStoreReader {
         args: [String],
         limit: Int,
         offset: Int = 0
-    ) throws -> [Note] {
+    ) throws(NoteStoreReaderError) -> [Note] {
         // Fresh handle per query — see `openHandle` doc for why.
         let db = try Self.openHandle(path: path)
         defer { sqlite3_close_v2(db) }
@@ -359,7 +364,7 @@ public actor NoteStoreReader {
     /// (`SQLITE_BUSY`, `SQLITE_CORRUPT`, `SQLITE_IOERR`, a runtime
     /// error) would otherwise surface as a silently truncated or empty
     /// result — throw instead so callers can fall back to ``NoteService``.
-    private static func requireDone(_ rc: Int32, db: OpaquePointer) throws {
+    private static func requireDone(_ rc: Int32, db: OpaquePointer) throws(NoteStoreReaderError) {
         guard rc == SQLITE_DONE else {
             let msg = String(cString: sqlite3_errmsg(db))
             throw NoteStoreReaderError.sqliteError("step failed (rc=\(rc)): \(msg)")
