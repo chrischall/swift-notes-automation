@@ -24,7 +24,7 @@ HTML, plus creation/modification dates. `bodyPage(_:offset:maxChars:)`
 and `matchExcerpt(query:in:maxLength:)` are pure helpers for paging a
 long body and re-anchoring a preview around a match.
 
-Platform: **macOS 26+** (Swift 6.4 toolchain, Xcode 27+). Pure Swift 6 with strict concurrency. Zero
+Platform: **macOS 27.2+** (Swift 6.4 toolchain, Xcode 27+). Pure Swift 6 with strict concurrency. Zero
 external dependencies (SQLite is via the system `SQLite3` module).
 
 ## Install

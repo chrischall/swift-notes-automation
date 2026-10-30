@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "swift-notes-automation",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS("27.2")],
     products: [
         .library(name: "NotesAutomation", targets: ["NotesAutomation"]),
     ],
