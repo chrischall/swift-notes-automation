@@ -23,21 +23,32 @@ struct ErrorTests {
             == "AppleScript compile error: nope")
     }
 
-    // MARK: - NoteServiceError
+    // MARK: - NotesError
 
-    @Test("NoteServiceError equality discriminates cases and associated values")
-    func noteServiceEquatable() {
-        #expect(NoteServiceError.invalidInput("x") == .invalidInput("x"))
-        #expect(NoteServiceError.invalidInput("x") != .invalidInput("y"))
-        #expect(NoteServiceError.scriptFailure("x") == .scriptFailure("x"))
-        #expect(NoteServiceError.scriptFailure("x") != .invalidInput("x"))
+    @Test("NotesError equality discriminates cases and associated values")
+    func notesErrorEquatable() {
+        #expect(NotesError.invalidInput("x") == .invalidInput("x"))
+        #expect(NotesError.invalidInput("x") != .invalidInput("y"))
+        #expect(NotesError.scriptFailure("x") == .scriptFailure("x"))
+        #expect(NotesError.scriptFailure("x") != .invalidInput("x"))
+        #expect(NotesError.appleScript(.runtime("x")) == .appleScript(.runtime("x")))
+        #expect(NotesError.appleScript(.runtime("x")) != .appleScript(.compile("x")))
+        #expect(NotesError.appleScript(.runtime("x")) != .scriptFailure("x"))
     }
 
-    @Test("NoteServiceError.errorDescription labels each case")
-    func noteServiceLocalizedError() {
-        #expect(NoteServiceError.invalidInput("title is required").errorDescription
+    @Test("NotesError.errorDescription labels each case")
+    func notesErrorLocalizedError() {
+        #expect(NotesError.invalidInput("title is required").errorDescription
             == "Invalid input: title is required")
-        #expect(NoteServiceError.scriptFailure("parse failed").errorDescription
+        #expect(NotesError.scriptFailure("parse failed").errorDescription
             == "Notes script failure: parse failed")
+    }
+
+    @Test("NotesError.appleScript keeps the runner error's description")
+    func notesErrorWrapsAppleScriptDescription() {
+        #expect(NotesError.appleScript(.runtime("oops")).errorDescription
+            == "AppleScript runtime error: oops")
+        #expect(NotesError.appleScript(.compile("nope")).errorDescription
+            == "AppleScript compile error: nope")
     }
 }

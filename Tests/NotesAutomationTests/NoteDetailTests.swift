@@ -156,7 +156,7 @@ struct NoteDetailTests {
     func getRejectsEmpty() async throws {
         let runner = FakeAppleScriptRunner()
         let svc = NoteService(runner: runner)
-        await #expect(throws: NoteServiceError.self) {
+        await #expect(throws: NotesError.self) {
             _ = try await svc.get(id: "   ")
         }
         #expect(runner.calls.isEmpty)
@@ -187,7 +187,7 @@ struct NoteDetailTests {
         let runner = FakeAppleScriptRunner()
         runner.queue("garbage without separators")
         let svc = NoteService(runner: runner)
-        await #expect(throws: NoteServiceError.self) {
+        await #expect(throws: NotesError.self) {
             _ = try await svc.get(id: "x-coredata://n/1")
         }
     }
@@ -197,7 +197,7 @@ struct NoteDetailTests {
         let runner = FakeAppleScriptRunner()
         runner.queueError("Can't get note id \"bogus\"")
         let svc = NoteService(runner: runner)
-        await #expect(throws: AppleScriptError.self) {
+        await #expect(throws: NotesError.appleScript(.runtime("Can't get note id \"bogus\""))) {
             _ = try await svc.get(id: "bogus")
         }
     }

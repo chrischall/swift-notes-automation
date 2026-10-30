@@ -31,13 +31,13 @@ struct BlankInputGuardTests {
     func idGuards(_ id: String) async throws {
         let runner = FakeAppleScriptRunner()
         let svc = NoteService(runner: runner)
-        await #expect(throws: NoteServiceError.invalidInput("id is required")) {
+        await #expect(throws: NotesError.invalidInput("id is required")) {
             _ = try await svc.get(id: id)
         }
-        await #expect(throws: NoteServiceError.invalidInput("id is required")) {
+        await #expect(throws: NotesError.invalidInput("id is required")) {
             try await svc.update(id: id, title: "t")
         }
-        await #expect(throws: NoteServiceError.invalidInput("id is required")) {
+        await #expect(throws: NotesError.invalidInput("id is required")) {
             try await svc.delete(id: id)
         }
         #expect(runner.calls.isEmpty)
@@ -46,7 +46,7 @@ struct BlankInputGuardTests {
     @Test("create rejects a newline-only title without running a script", arguments: blanks)
     func titleGuard(_ title: String) async throws {
         let runner = FakeAppleScriptRunner()
-        await #expect(throws: NoteServiceError.invalidInput("title is required")) {
+        await #expect(throws: NotesError.invalidInput("title is required")) {
             _ = try await NoteService(runner: runner).create(title: title, body: "b")
         }
         #expect(runner.calls.isEmpty)

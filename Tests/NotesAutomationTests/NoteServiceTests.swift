@@ -64,7 +64,7 @@ struct NoteServiceTests {
     @Test("create requires a non-empty title")
     func createValidation() async throws {
         let svc = NoteService(runner: FakeAppleScriptRunner())
-        await #expect(throws: NoteServiceError.self) {
+        await #expect(throws: NotesError.self) {
             _ = try await svc.create(title: "  ", body: "some body")
         }
     }
@@ -184,7 +184,7 @@ struct NoteServiceTests {
         runner.queueError("Not authorized to send Apple events to Notes.")
         let svc = NoteService(runner: runner)
 
-        await #expect(throws: AppleScriptError.self) {
+        await #expect(throws: NotesError.appleScript(.runtime("Not authorized to send Apple events to Notes."))) {
             _ = try await svc.list()
         }
     }
@@ -208,7 +208,7 @@ struct NoteServiceTests {
         runner.queueError("Notes got an error")
         let svc = NoteService(runner: runner)
 
-        await #expect(throws: AppleScriptError.self) {
+        await #expect(throws: NotesError.appleScript(.runtime("Notes got an error"))) {
             _ = try await svc.search(query: "x")
         }
     }
@@ -295,7 +295,7 @@ struct NoteServiceTests {
         runner.queueError("Notes.app not running")
         let svc = NoteService(runner: runner)
 
-        await #expect(throws: AppleScriptError.self) {
+        await #expect(throws: NotesError.appleScript(.runtime("Notes.app not running"))) {
             _ = try await svc.create(title: "X", body: "Y")
         }
     }
@@ -322,10 +322,10 @@ struct NoteServiceTests {
     @Test("delete rejects empty / whitespace-only ids")
     func deleteRejectsEmpty() async throws {
         let svc = NoteService(runner: FakeAppleScriptRunner())
-        await #expect(throws: NoteServiceError.self) {
+        await #expect(throws: NotesError.self) {
             try await svc.delete(id: "")
         }
-        await #expect(throws: NoteServiceError.self) {
+        await #expect(throws: NotesError.self) {
             try await svc.delete(id: "   ")
         }
     }
@@ -349,7 +349,7 @@ struct NoteServiceTests {
         runner.queueError("Can't get note id \"bogus\"")
         let svc = NoteService(runner: runner)
 
-        await #expect(throws: AppleScriptError.self) {
+        await #expect(throws: NotesError.appleScript(.runtime("Can't get note id \"bogus\""))) {
             try await svc.delete(id: "bogus")
         }
     }
