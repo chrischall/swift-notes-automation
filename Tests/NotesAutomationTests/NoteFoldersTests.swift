@@ -41,7 +41,7 @@ struct NoteFoldersTests {
         let runner = FakeAppleScriptRunner()
         runner.queueError("Not authorized to send Apple events to Notes.")
         let svc = NoteService(runner: runner)
-        await #expect(throws: AppleScriptError.self) {
+        await #expect(throws: NotesError.appleScript(.runtime("Not authorized to send Apple events to Notes."))) {
             _ = try await svc.folders()
         }
     }

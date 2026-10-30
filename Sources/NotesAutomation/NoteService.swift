@@ -1,32 +1,4 @@
-public import Foundation
-
-/// Errors surfaced by ``NoteService`` operations.
-public enum NoteServiceError: Error, Equatable, Sendable {
-    /// AppleScript ran successfully but Notes.app reported a non-success
-    /// result, or the returned payload could not be parsed.
-    ///
-    /// The associated value carries a human-readable diagnostic intended
-    /// for logs, not end users.
-    case scriptFailure(String)
-
-    /// The caller passed an empty or whitespace-only string for a
-    /// required parameter (most commonly `title` on ``NoteService/create(title:body:folder:)``).
-    ///
-    /// The associated value names the offending parameter.
-    case invalidInput(String)
-}
-
-extension NoteServiceError: LocalizedError {
-    /// Human-readable description suitable for logs and user display.
-    public var errorDescription: String? {
-        switch self {
-        case let .scriptFailure(message):
-            "Notes script failure: \(message)"
-        case let .invalidInput(message):
-            "Invalid input: \(message)"
-        }
-    }
-}
+import Foundation
 
 /// High-level wrapper around Apple Notes.app.
 ///
@@ -77,6 +49,17 @@ public struct NoteService: Sendable {
         self.runner = runner
     }
 
+    /// Runs `source` through the injected runner, wrapping its
+    /// ``AppleScriptError`` as ``NotesError/appleScript(_:)`` so every
+    /// public method throws the one ``NotesError`` type.
+    private func run(source: String) async throws(NotesError) -> String {
+        do {
+            return try await runner.run(source: source)
+        } catch {
+            throw .appleScript(error)
+        }
+    }
+
     /// Maximum length of the ``Note/snippet`` preview returned by
     /// ``list(limit:offset:)`` and ``search(query:limit:offset:)``.
     ///
@@ -96,11 +79,11 @@ public struct NoteService: Sendable {
     /// - Returns: Notes in Notes.app's native iteration order, which is
     ///   typically most-recently-modified first. The array is empty when
     ///   the user has no notes.
-    /// - Throws: ``AppleScriptError/runtime(_:)`` when Notes.app is not
-    ///   running or Automation permission is denied.
-    public func list(limit: Int = 20, offset: Int = 0) async throws -> [Note] {
+    /// - Throws: ``NotesError/appleScript(_:)`` wrapping `.runtime` when
+    ///   Notes.app is not running or Automation permission is denied.
+    public func list(limit: Int = 20, offset: Int = 0) async throws(NotesError) -> [Note] {
         let source = Self.listOrSearchScript(query: nil, limit: limit, offset: offset)
-        let raw = try await runner.run(source: source)
+        let raw = try await run(source: source)
         return Self.parseNoteLines(raw)
     }
 
@@ -117,12 +100,12 @@ public struct NoteService: Sendable {
     ///   - offset: Number of leading matches to skip, for paging. Defaults
     ///     to `0`.
     /// - Returns: Matching notes, up to `limit`.
-    /// - Throws: ``AppleScriptError/runtime(_:)`` when Notes.app is not
-    ///   running or Automation permission is denied.
-    public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> [Note] {
+    /// - Throws: ``NotesError/appleScript(_:)`` wrapping `.runtime` when
+    ///   Notes.app is not running or Automation permission is denied.
+    public func search(query: String, limit: Int = 20, offset: Int = 0) async throws(NotesError) -> [Note] {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         let source = Self.listOrSearchScript(query: query, limit: limit, offset: offset)
-        let raw = try await runner.run(source: source)
+        let raw = try await run(source: source)
         return Self.parseNoteLines(raw)
     }
 
@@ -147,22 +130,22 @@ public struct NoteService: Sendable {
     ///
     /// - Parameter id: The note's opaque id, as returned by ``Note/id`` or
     ///   ``create(title:body:folder:)``. Empty or whitespace-only ids throw
-    ///   ``NoteServiceError/invalidInput(_:)`` without running any script.
+    ///   ``NotesError/invalidInput(_:)`` without running any script.
     /// - Returns: The note's full contents.
     /// - Throws:
-    ///   - ``NoteServiceError/invalidInput(_:)`` when `id` is empty.
-    ///   - ``NoteServiceError/scriptFailure(_:)`` when Notes.app returned
+    ///   - ``NotesError/invalidInput(_:)`` when `id` is empty.
+    ///   - ``NotesError/scriptFailure(_:)`` when Notes.app returned
     ///     output that couldn't be parsed.
-    ///   - ``AppleScriptError/runtime(_:)`` when no note has that id
-    ///     (`note id "…"` raises inside Notes.app), Notes.app is not
-    ///     running, or Automation permission is denied.
-    public func get(id: String) async throws -> NoteDetail {
+    ///   - ``NotesError/appleScript(_:)`` wrapping `.runtime` when no note
+    ///     has that id (`note id "…"` raises inside Notes.app), Notes.app
+    ///     is not running, or Automation permission is denied.
+    public func get(id: String) async throws(NotesError) -> NoteDetail {
         guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw NoteServiceError.invalidInput("id is required")
+            throw NotesError.invalidInput("id is required")
         }
-        let raw = try await runner.run(source: Self.getScript(id: id))
+        let raw = try await run(source: Self.getScript(id: id))
         guard let detail = Self.parseNoteDetail(raw) else {
-            throw NoteServiceError.scriptFailure(
+            throw NotesError.scriptFailure(
                 "could not parse note detail for id \(id) — no note with that id?"
             )
         }
@@ -179,10 +162,10 @@ public struct NoteService: Sendable {
     /// each have a folder of the same name.
     ///
     /// - Returns: Folder names. Empty when the user has no folders.
-    /// - Throws: ``AppleScriptError/runtime(_:)`` when Notes.app is not
-    ///   running or Automation permission is denied.
-    public func folders() async throws -> [String] {
-        let raw = try await runner.run(source: Self.foldersScript())
+    /// - Throws: ``NotesError/appleScript(_:)`` wrapping `.runtime` when
+    ///   Notes.app is not running or Automation permission is denied.
+    public func folders() async throws(NotesError) -> [String] {
+        let raw = try await run(source: Self.foldersScript())
         return Self.parseFolderLines(raw)
     }
 
@@ -207,12 +190,13 @@ public struct NoteService: Sendable {
     /// - Returns: The newly-created note's opaque id — matches the
     ///   ``Note/id`` of values returned by ``list(limit:)`` and
     ///   ``search(query:limit:)``.
-    /// - Throws: ``NoteServiceError/invalidInput(_:)`` when `title` is
-    ///   empty or whitespace-only. ``AppleScriptError/runtime(_:)`` when
-    ///   Notes.app is not running or Automation permission is denied.
-    public func create(title: String, body: String, folder: String? = nil) async throws -> String {
+    /// - Throws: ``NotesError/invalidInput(_:)`` when `title` is
+    ///   empty or whitespace-only. ``NotesError/appleScript(_:)`` wrapping
+    ///   `.runtime` when Notes.app is not running or Automation permission
+    ///   is denied.
+    public func create(title: String, body: String, folder: String? = nil) async throws(NotesError) -> String {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw NoteServiceError.invalidInput("title is required")
+            throw NotesError.invalidInput("title is required")
         }
         // Notes.app treats the body as HTML-ish; combining title + body so
         // the UI renders a proper header. The title is plain text, so it is
@@ -247,7 +231,7 @@ public struct NoteService: Sendable {
             return (id of newNote as string)
         end tell
         """
-        return try await runner.run(source: source)
+        return try await run(source: source)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -266,31 +250,32 @@ public struct NoteService: Sendable {
     ///
     /// - Parameters:
     ///   - id: The note's opaque id. Empty or whitespace-only ids throw
-    ///     ``NoteServiceError/invalidInput(_:)``.
+    ///     ``NotesError/invalidInput(_:)``.
     ///   - title: New title, or `nil` to leave unchanged.
     ///   - body: New body (HTML allowed), or `nil` to leave unchanged.
     ///   - folder: Folder to move the note into (created if absent), or
     ///     `nil` to leave the note where it is.
     /// - Throws:
-    ///   - ``NoteServiceError/invalidInput(_:)`` when `id` is empty or when
+    ///   - ``NotesError/invalidInput(_:)`` when `id` is empty or when
     ///     all of `title`, `body`, and `folder` are `nil`.
-    ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running,
-    ///     Automation permission is denied, or no note has that id.
+    ///   - ``NotesError/appleScript(_:)`` wrapping `.runtime` when Notes.app
+    ///     is not running, Automation permission is denied, or no note has
+    ///     that id.
     public func update(
         id: String,
         title: String? = nil,
         body: String? = nil,
         folder: String? = nil
-    ) async throws {
+    ) async throws(NotesError) {
         guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw NoteServiceError.invalidInput("id is required")
+            throw NotesError.invalidInput("id is required")
         }
         guard title != nil || body != nil || folder != nil else {
-            throw NoteServiceError.invalidInput(
+            throw NotesError.invalidInput(
                 "nothing to update — provide a title, body, and/or folder"
             )
         }
-        _ = try await runner.run(
+        _ = try await run(
             source: Self.updateScript(id: id, title: title, body: body, folder: folder)
         )
     }
@@ -304,17 +289,18 @@ public struct NoteService: Sendable {
     /// return (Notes.app's Core Data URI, e.g. `x-coredata://…/ICNote/p42`).
     ///
     /// - Parameter id: The note's opaque id. Empty or whitespace-only ids
-    ///   throw ``NoteServiceError/invalidInput(_:)`` without running any
+    ///   throw ``NotesError/invalidInput(_:)`` without running any
     ///   AppleScript.
     /// - Throws:
-    ///   - ``NoteServiceError/invalidInput(_:)`` when `id` is empty.
-    ///   - ``AppleScriptError/runtime(_:)`` when Notes.app is not running,
-    ///     Automation permission is denied, or no note with that id exists.
-    public func delete(id: String) async throws {
+    ///   - ``NotesError/invalidInput(_:)`` when `id` is empty.
+    ///   - ``NotesError/appleScript(_:)`` wrapping `.runtime` when Notes.app
+    ///     is not running, Automation permission is denied, or no note with
+    ///     that id exists.
+    public func delete(id: String) async throws(NotesError) {
         guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw NoteServiceError.invalidInput("id is required")
+            throw NotesError.invalidInput("id is required")
         }
-        _ = try await runner.run(source: Self.deleteScript(id: id))
+        _ = try await run(source: Self.deleteScript(id: id))
     }
 
     // MARK: - Body windowing helpers
@@ -422,7 +408,7 @@ public struct NoteService: Sendable {
     ///
     /// Looks up the note via `note id "…"`, which references Notes.app's
     /// Core Data URI. If the note doesn't exist, AppleScript raises at
-    /// runtime — callers surface that as ``AppleScriptError/runtime(_:)``.
+    /// runtime — callers surface that as ``NotesError/appleScript(_:)``.
     ///
     /// - Parameter id: The note's opaque id. Backslashes and double-quotes
     ///   are escaped (via ``escapeForAppleScript(_:)``) defensively before

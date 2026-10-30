@@ -9,7 +9,7 @@ struct NoteUpdateTests {
     @Test("update rejects empty / whitespace-only ids")
     func rejectsEmptyId() async throws {
         let svc = NoteService(runner: FakeAppleScriptRunner())
-        await #expect(throws: NoteServiceError.self) {
+        await #expect(throws: NotesError.self) {
             try await svc.update(id: "  ", title: "New")
         }
     }
@@ -18,7 +18,7 @@ struct NoteUpdateTests {
     func rejectsNoOp() async throws {
         let runner = FakeAppleScriptRunner()
         let svc = NoteService(runner: runner)
-        await #expect(throws: NoteServiceError.self) {
+        await #expect(throws: NotesError.self) {
             try await svc.update(id: "x-coredata://n/1")
         }
         #expect(runner.calls.isEmpty)
@@ -88,7 +88,7 @@ struct NoteUpdateTests {
         let runner = FakeAppleScriptRunner()
         runner.queueError("Can't get note id \"bogus\"")
         let svc = NoteService(runner: runner)
-        await #expect(throws: AppleScriptError.self) {
+        await #expect(throws: NotesError.appleScript(.runtime("Can't get note id \"bogus\""))) {
             try await svc.update(id: "bogus", title: "T")
         }
     }

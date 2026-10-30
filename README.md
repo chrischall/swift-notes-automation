@@ -32,7 +32,7 @@ external dependencies (SQLite is via the system `SQLite3` module).
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/chrischall/swift-notes-automation.git", from: "1.1.2"),
+    .package(url: "https://github.com/chrischall/swift-notes-automation.git", from: "3.0.0"),
 ]
 ```
 
@@ -99,13 +99,31 @@ working. Requires Full Disk Access on macOS (see *Permissions*).
 ### `NoteService`
 
 AppleScript-backed CRUD. Construct once, reuse across calls. All
-methods are async and throw `AppleScriptError` or `NoteServiceError`.
+methods are async and typed `throws(NotesError)`, so `catch` blocks get a
+`NotesError` without casting:
+
+| `NotesError` case | Meaning |
+|---|---|
+| `.invalidInput(String)` | Empty id/title, or an update with nothing to change. No AppleScript ran |
+| `.scriptFailure(String)` | The script ran but its output couldn't be parsed |
+| `.appleScript(.runtime(String))` | Notes.app not running, Automation denied, or no note with that id |
+| `.appleScript(.compile(String))` | The runner couldn't compile the script |
+
+```swift
+do {
+    let note = try await notes.get(id: id)
+} catch .appleScript(.runtime(let message)) {
+    print("Notes said no: \(message)")
+} catch {
+    print(error.localizedDescription)   // error is NotesError
+}
+```
 
 | Method | Purpose |
 |---|---|
 | `list(limit:offset:) -> [Note]` | Most-recently-modified notes |
 | `search(query:limit:offset:) -> [Note]` | Case-insensitive substring match against title OR plain-text body (not the HTML, so tag/attribute text never matches) |
-| `get(id:) -> NoteDetail` | One note's complete body (plain text + HTML) and dates. An unknown id throws `AppleScriptError.runtime` |
+| `get(id:) -> NoteDetail` | One note's complete body (plain text + HTML) and dates. An unknown id throws `NotesError.appleScript(.runtime(_))` |
 | `folders() -> [String]` | Folder names |
 | `create(title:body:folder:) -> String` | Create a note; returns id |
 | `update(id:title:body:folder:)` | Change title, body and/or folder in place |
@@ -134,7 +152,8 @@ folder: String    // containing folder name
 
 ### `AppleScriptRunner` / `NSAppleScriptRunner`
 
-Protocol + production impl. Inject a fake in unit tests (see below).
+Protocol + production impl. `run(source:)` is typed
+`throws(AppleScriptError)`. Inject a fake in unit tests (see below).
 
 ## Capabilities and limits
 
@@ -177,13 +196,59 @@ is still out of scope — the Ruby `apple_cloud_notes_parser` and Rust
 ```swift
 import NotesAutomation
 
-final class FakeRunner: AppleScriptRunner {
+struct FakeRunner: AppleScriptRunner {
     var response = ""
-    func run(source: String) async throws -> String { response }
+    func run(source: String) async throws(AppleScriptError) -> String { response }
 }
 
 let notes = NoteService(runner: FakeRunner())
 ```
+
+## Migrating to 3.0 (typed throws)
+
+3.0 makes the `NoteService` error contract explicit. Every method is now
+`throws(NotesError)`, and the `AppleScriptRunner` requirement is
+`throws(AppleScriptError)`.
+
+- **`NoteServiceError` is now `NotesError`.** The `.invalidInput` and
+  `.scriptFailure` cases are unchanged. A deprecated
+  `typealias NoteServiceError = NotesError` keeps old spellings compiling,
+  with a rename fix-it.
+- **Runner failures are wrapped.** A `NoteService` call that used to throw
+  a bare `AppleScriptError` now throws `NotesError.appleScript(_)`:
+
+  ```swift
+  // 2.x
+  } catch let error as AppleScriptError { … }
+  } catch let error as NoteServiceError { … }
+
+  // 3.0: `error` is already a NotesError; no casts
+  } catch {
+      switch error {
+      case let .appleScript(scriptError): …        // .runtime / .compile
+      case let .invalidInput(what): …
+      case let .scriptFailure(why): …
+      }
+  }
+  ```
+
+  Pattern clauses such as `catch .appleScript(let e)` work too. Swift
+  doesn't treat a chain of them as exhaustive, though, so end the chain
+  with a plain `catch` or use the `switch` above.
+
+  A 2.x `catch let e as AppleScriptError` around a `NoteService` call no
+  longer matches anything; the compiler warns that the cast always fails.
+  `#expect(throws: AppleScriptError.self)` in tests compiles but now
+  fails at runtime, so expect `NotesError.appleScript(.runtime("…"))`
+  instead.
+- **Custom runners must throw `AppleScriptError`.** Change
+  `func run(source:) async throws -> String` to
+  `async throws(AppleScriptError) -> String`, and map your own failures
+  onto `.runtime` / `.compile`. A runner that never fails can drop
+  `throws`.
+- `errorDescription` is unchanged for every failure. `.appleScript`
+  forwards the wrapped `AppleScriptError`'s text.
+- `NoteStoreReader` is untouched; it still throws `NoteStoreReaderError`.
 
 ## License
 

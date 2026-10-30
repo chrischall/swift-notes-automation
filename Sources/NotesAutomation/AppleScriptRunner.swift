@@ -30,7 +30,12 @@ public protocol AppleScriptRunner: Sendable {
     /// runner may block for the whole script (shelling out to
     /// `osascript`, say), and that must never stall a main-actor caller.
     /// ``NSAppleScriptRunner`` then hops to the main thread itself.
-    @concurrent func run(source: String) async throws -> String
+    ///
+    /// Typed `throws(AppleScriptError)`: a conformer maps whatever went
+    /// wrong (a non-zero `osascript` exit, say) onto ``AppleScriptError``,
+    /// and ``NoteService`` surfaces it as ``NotesError/appleScript(_:)``.
+    /// A conformer that never fails may drop `throws` entirely.
+    @concurrent func run(source: String) async throws(AppleScriptError) -> String
 }
 
 /// Errors surfaced by an ``AppleScriptRunner`` execution.

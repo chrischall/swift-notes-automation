@@ -15,7 +15,7 @@ struct RunnerIsolationTests {
     /// Answers every script with whether it ran on the main thread.
     /// Its `run` is nonisolated(nonsending) under this target's settings.
     struct ThreadProbeRunner: AppleScriptRunner {
-        func run(source _: String) async throws -> String {
+        func run(source _: String) async -> String {
             Self.onMain() ? "main" : "background"
         }
 
