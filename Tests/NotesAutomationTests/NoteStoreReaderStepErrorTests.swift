@@ -16,10 +16,10 @@ struct NoteStoreReaderStepErrorTests {
     private func makeStepFailingFixture() throws -> String {
         let path = try NoteStoreFixture.create()
         var db: OpaquePointer?
-        guard sqlite3_open(path, &db) == SQLITE_OK, let db else {
+        guard unsafe sqlite3_open(path, &db) == SQLITE_OK, let db = unsafe db else {
             throw NoteStoreFixture.FixtureError.openFailed(path)
         }
-        defer { sqlite3_close_v2(db) }
+        defer { unsafe sqlite3_close_v2(db) }
         let sql = """
             ALTER TABLE ZICCLOUDSYNCINGOBJECT RENAME TO RAW_OBJECTS;
             CREATE VIEW ZICCLOUDSYNCINGOBJECT AS
@@ -30,8 +30,8 @@ struct NoteStoreReaderStepErrorTests {
                    ZMODIFICATIONDATE1, ZCREATIONDATE1
             FROM RAW_OBJECTS;
             """
-        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
-            throw NoteStoreFixture.FixtureError.execFailed(String(cString: sqlite3_errmsg(db)))
+        guard unsafe sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+            throw NoteStoreFixture.FixtureError.execFailed(unsafe String(cString: sqlite3_errmsg(db)))
         }
         return path
     }

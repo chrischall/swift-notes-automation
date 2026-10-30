@@ -21,10 +21,13 @@ let package = Package(
     swiftLanguageModes: [.v6]
 )
 
-/// Swift 6 language mode (complete strict concurrency) plus upcoming
-/// features that tighten the source without changing runtime behaviour.
+/// Swift 6 language mode (complete strict concurrency), every upcoming
+/// feature the 6.4 toolchain offers, and strict memory safety.
+///
 /// `InternalImportsByDefault` makes imports internal: files whose public
 /// API names Foundation types say `public import Foundation`.
+/// `.strictMemorySafety()` requires every SQLite C call to be marked
+/// `unsafe`.
 ///
 /// `NonisolatedNonsendingByDefault` is the one that changes runtime
 /// behaviour: a nonisolated `async` function now runs on its caller's
@@ -38,5 +41,6 @@ var swiftSettings: [SwiftSetting] {
         .enableUpcomingFeature("InferIsolatedConformances"),
         .enableUpcomingFeature("ImmutableWeakCaptures"),
         .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+        .strictMemorySafety(),
     ]
 }

@@ -23,13 +23,13 @@ struct NoteStoreReaderWALTests {
         }
 
         var writer: OpaquePointer?
-        guard sqlite3_open(src, &writer) == SQLITE_OK, let writer else {
+        guard unsafe sqlite3_open(src, &writer) == SQLITE_OK, let writer = unsafe writer else {
             Issue.record("could not open fixture for writing")
             throw CancellationError()
         }
-        #expect(sqlite3_exec(writer, "PRAGMA journal_mode = WAL", nil, nil, nil) == SQLITE_OK)
-        #expect(sqlite3_exec(writer, "PRAGMA wal_autocheckpoint = 0", nil, nil, nil) == SQLITE_OK)
-        #expect(sqlite3_exec(
+        #expect(unsafe sqlite3_exec(writer, "PRAGMA journal_mode = WAL", nil, nil, nil) == SQLITE_OK)
+        #expect(unsafe sqlite3_exec(writer, "PRAGMA wal_autocheckpoint = 0", nil, nil, nil) == SQLITE_OK)
+        #expect(unsafe sqlite3_exec(
             writer,
             "UPDATE ZICCLOUDSYNCINGOBJECT SET ZTITLE1 = 'Cookies (from WAL)' WHERE Z_PK = 5",
             nil, nil, nil) == SQLITE_OK)
@@ -41,7 +41,7 @@ struct NoteStoreReaderWALTests {
         let db = dir + "/NoteStore.sqlite"
         try FileManager.default.copyItem(atPath: src, toPath: db)
         try FileManager.default.copyItem(atPath: src + "-wal", toPath: db + "-wal")
-        sqlite3_close_v2(writer)
+        unsafe sqlite3_close_v2(writer)
         return (dir, db)
     }
 
@@ -72,12 +72,12 @@ struct NoteStoreReaderWALTests {
             }
         }
         var writer: OpaquePointer?
-        guard sqlite3_open(path, &writer) == SQLITE_OK, let writer else {
+        guard unsafe sqlite3_open(path, &writer) == SQLITE_OK, let writer = unsafe writer else {
             Issue.record("could not open fixture for writing")
             return
         }
-        #expect(sqlite3_exec(writer, "PRAGMA journal_mode = WAL", nil, nil, nil) == SQLITE_OK)
-        sqlite3_close_v2(writer)
+        #expect(unsafe sqlite3_exec(writer, "PRAGMA journal_mode = WAL", nil, nil, nil) == SQLITE_OK)
+        unsafe sqlite3_close_v2(writer)
         #expect(!FileManager.default.fileExists(atPath: path + "-wal"))
 
         let before = try Data(contentsOf: URL(fileURLWithPath: path))
@@ -96,18 +96,18 @@ struct NoteStoreReaderWALTests {
             }
         }
         var writer: OpaquePointer?
-        guard sqlite3_open(path, &writer) == SQLITE_OK, let writer else {
+        guard unsafe sqlite3_open(path, &writer) == SQLITE_OK, let writer = unsafe writer else {
             Issue.record("could not open fixture for writing")
             return
         }
-        defer { sqlite3_close_v2(writer) }
-        #expect(sqlite3_exec(writer, "PRAGMA journal_mode = WAL", nil, nil, nil) == SQLITE_OK)
+        defer { unsafe sqlite3_close_v2(writer) }
+        #expect(unsafe sqlite3_exec(writer, "PRAGMA journal_mode = WAL", nil, nil, nil) == SQLITE_OK)
 
         let reader = try NoteStoreReader(path: path)
         #expect(try await reader.list(limit: 20).map(\.title).contains("Cookies"))
 
         // Stands in for Notes.app committing while the reader is alive.
-        #expect(sqlite3_exec(
+        #expect(unsafe sqlite3_exec(
             writer,
             "UPDATE ZICCLOUDSYNCINGOBJECT SET ZTITLE1 = 'Cookies v2' WHERE Z_PK = 5",
             nil, nil, nil) == SQLITE_OK)

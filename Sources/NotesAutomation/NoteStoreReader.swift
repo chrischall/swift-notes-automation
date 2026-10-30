@@ -98,13 +98,13 @@ public actor NoteStoreReader {
     ///   the file doesn't exist or the caller lacks permission.
     public init(path: String = NoteStoreReader.defaultDatabasePath) throws(NoteStoreReaderError) {
         self.path = path
-        let handle = try Self.openHandle(path: path)
-        defer { sqlite3_close_v2(handle) }
+        let handle = try unsafe Self.openHandle(path: path)
+        defer { unsafe sqlite3_close_v2(handle) }
         // Capture the Core Data store UUID once so we can mint
         // `x-coredata://…` ids compatible with NoteService (which returns
         // this format from AppleScript). Best-effort — if the column
         // isn't there we fall back to ZIDENTIFIER.
-        self.storeUUID = Self.readStoreUUID(db: handle)
+        self.storeUUID = unsafe Self.readStoreUUID(db: handle)
     }
 
     /// Opens a fresh SQLite handle for one query. Callers must `sqlite3_close_v2`
@@ -126,61 +126,61 @@ public actor NoteStoreReader {
     /// store (Apple's SQLite persists the empty `-wal`/`-shm` it creates,
     /// after which later queries take the read-only path).
     private static func openHandle(path: String) throws(NoteStoreReaderError) -> OpaquePointer {
-        var handle = try rawOpen(path: path, flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX)
+        var handle = try unsafe rawOpen(path: path, flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX)
         // Notes.app writes through WAL while we read. A checkpoint or
         // recovery can briefly hold a lock; wait up to a second rather
         // than failing (or, before step-error checking, truncating) on
         // the first SQLITE_BUSY.
-        sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
+        unsafe sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
         // sqlite3_open_v2 is lazy; touch the schema to surface the
         // read-only + missing `-wal` case here rather than mid-query.
-        if sqlite3_exec(handle, "PRAGMA schema_version", nil, nil, nil) == SQLITE_CANTOPEN {
-            sqlite3_close_v2(handle)
-            handle = try rawOpen(path: path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX)
-            sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
+        if unsafe sqlite3_exec(handle, "PRAGMA schema_version", nil, nil, nil) == SQLITE_CANTOPEN {
+            unsafe sqlite3_close_v2(handle)
+            unsafe handle = try unsafe rawOpen(path: path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX)
+            unsafe sqlite3_busy_timeout(handle, busyTimeoutMilliseconds)
         }
         // Belt and braces on top of SQLITE_OPEN_READONLY: reject SQL
         // writes at the connection level too. A failure here must not be
         // swallowed — refuse the handle rather than assume it's safe.
-        let pragmaRC = sqlite3_exec(handle, "PRAGMA query_only = 1", nil, nil, nil)
+        let pragmaRC = unsafe sqlite3_exec(handle, "PRAGMA query_only = 1", nil, nil, nil)
         guard pragmaRC == SQLITE_OK else {
-            let msg = String(cString: sqlite3_errmsg(handle))
-            sqlite3_close_v2(handle)
+            let msg = unsafe String(cString: sqlite3_errmsg(handle))
+            unsafe sqlite3_close_v2(handle)
             throw NoteStoreReaderError.databaseNotAccessible(
                 "Failed to set PRAGMA query_only on \(path): \(msg). Refusing " +
                 "to return a writable handle to the Notes store."
             )
         }
-        let fnRC = sqlite3_create_function_v2(
+        let fnRC = unsafe sqlite3_create_function_v2(
             handle, containsFunctionName, 2,
             SQLITE_UTF8 | SQLITE_DETERMINISTIC, nil,
             notesAutomationContains, nil, nil, nil
         )
         guard fnRC == SQLITE_OK else {
-            let msg = String(cString: sqlite3_errmsg(handle))
-            sqlite3_close_v2(handle)
+            let msg = unsafe String(cString: sqlite3_errmsg(handle))
+            unsafe sqlite3_close_v2(handle)
             throw NoteStoreReaderError.sqliteError(
                 "Failed to register \(containsFunctionName): \(msg)"
             )
         }
-        return handle
+        return unsafe handle
     }
 
     /// `sqlite3_open_v2` with the Full Disk Access remediation hint on failure.
     private static func rawOpen(path: String, flags: Int32) throws(NoteStoreReaderError) -> OpaquePointer {
         var handle: OpaquePointer?
-        let rc = sqlite3_open_v2(path, &handle, flags, nil)
-        guard rc == SQLITE_OK, let handle else {
-            let msg = handle.map { String(cString: sqlite3_errmsg($0)) }
+        let rc = unsafe sqlite3_open_v2(path, &handle, flags, nil)
+        guard rc == SQLITE_OK, let handle = unsafe handle else {
+            let msg = unsafe handle.map { unsafe String(cString: sqlite3_errmsg($0)) }
                 ?? "sqlite3_open_v2 returned \(rc)"
-            if let h = handle { sqlite3_close_v2(h) }
+            if let h = unsafe handle { unsafe sqlite3_close_v2(h) }
             throw NoteStoreReaderError.databaseNotAccessible(
                 "Cannot open \(path): \(msg). On macOS, grant Full Disk " +
                 "Access to the calling binary in System Settings → " +
                 "Privacy & Security → Full Disk Access."
             )
         }
-        return handle
+        return unsafe handle
     }
 
     /// Name of the SQL function registered on every handle for
@@ -247,8 +247,8 @@ public actor NoteStoreReader {
     /// Ordered by name (case-insensitive). Duplicate names are possible
     /// when two accounts each have a folder of the same name.
     public func folders() async throws(NoteStoreReaderError) -> [String] {
-        let db = try Self.openHandle(path: path)
-        defer { sqlite3_close_v2(db) }
+        let db = try unsafe Self.openHandle(path: path)
+        defer { unsafe sqlite3_close_v2(db) }
 
         // Folders are the `ICFolder` entity. Same trash exclusion the note
         // query uses: skip ZFOLDERTYPE = 1 and `TrashFolder-*` identifiers.
@@ -262,20 +262,20 @@ public actor NoteStoreReader {
             ORDER BY LOWER(f.ZTITLE2)
             """
         var stmt: OpaquePointer?
-        let rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
-        guard rc == SQLITE_OK, let stmt else {
-            let msg = String(cString: sqlite3_errmsg(db))
+        let rc = unsafe sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
+        guard rc == SQLITE_OK, let stmt = unsafe stmt else {
+            let msg = unsafe String(cString: sqlite3_errmsg(db))
             throw NoteStoreReaderError.sqliteError("prepare failed: \(msg)")
         }
-        defer { sqlite3_finalize(stmt) }
+        defer { unsafe sqlite3_finalize(stmt) }
 
         var results: [String] = []
-        var stepRC = sqlite3_step(stmt)
+        var stepRC = unsafe sqlite3_step(stmt)
         while stepRC == SQLITE_ROW {
-            if let name = columnText(stmt, 0) { results.append(name) }
-            stepRC = sqlite3_step(stmt)
+            if let name = unsafe columnText(stmt, 0) { results.append(name) }
+            stepRC = unsafe sqlite3_step(stmt)
         }
-        try Self.requireDone(stepRC, db: db)
+        try unsafe Self.requireDone(stepRC, db: db)
         return results
     }
 
@@ -317,45 +317,45 @@ public actor NoteStoreReader {
         offset: Int = 0
     ) throws(NoteStoreReaderError) -> [Note] {
         // Fresh handle per query — see `openHandle` doc for why.
-        let db = try Self.openHandle(path: path)
-        defer { sqlite3_close_v2(db) }
+        let db = try unsafe Self.openHandle(path: path)
+        defer { unsafe sqlite3_close_v2(db) }
 
         let sql = Self.baseQuery + "\n" + extraPredicate +
             "\nORDER BY n.ZMODIFICATIONDATE1 DESC\nLIMIT ? OFFSET ?"
 
         var stmt: OpaquePointer?
-        let rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
-        guard rc == SQLITE_OK, let stmt else {
-            let msg = String(cString: sqlite3_errmsg(db))
+        let rc = unsafe sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
+        guard rc == SQLITE_OK, let stmt = unsafe stmt else {
+            let msg = unsafe String(cString: sqlite3_errmsg(db))
             throw NoteStoreReaderError.sqliteError("prepare failed: \(msg)")
         }
-        defer { sqlite3_finalize(stmt) }
+        defer { unsafe sqlite3_finalize(stmt) }
 
         // Bind positional `?` params. Strings get SQLITE_TRANSIENT so
         // SQLite copies them before they go out of scope.
-        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        let transient = unsafe unsafeBitCast(-1, to: sqlite3_destructor_type.self)
         for (i, s) in args.enumerated() {
-            sqlite3_bind_text(stmt, Int32(i + 1), s, -1, transient)
+            unsafe sqlite3_bind_text(stmt, Int32(i + 1), s, -1, transient)
         }
         // 64-bit binds so a caller-supplied value past Int32 can't trap
         // the conversion. A negative limit clamps to 0: SQLite reads
         // `LIMIT -1` as "unlimited", which would return the whole library.
-        sqlite3_bind_int64(stmt, Int32(args.count + 1), Int64(max(0, limit)))
-        sqlite3_bind_int64(stmt, Int32(args.count + 2), Int64(max(0, offset)))
+        unsafe sqlite3_bind_int64(stmt, Int32(args.count + 1), Int64(max(0, limit)))
+        unsafe sqlite3_bind_int64(stmt, Int32(args.count + 2), Int64(max(0, offset)))
 
         var results: [Note] = []
-        var stepRC = sqlite3_step(stmt)
+        var stepRC = unsafe sqlite3_step(stmt)
         while stepRC == SQLITE_ROW {
-            let pk = sqlite3_column_int64(stmt, 0)
-            let zid = columnText(stmt, 1) ?? ""
-            let title = columnText(stmt, 2) ?? ""
-            let snippet = columnText(stmt, 3) ?? ""
-            let folder = columnText(stmt, 4) ?? ""
+            let pk = unsafe sqlite3_column_int64(stmt, 0)
+            let zid = unsafe columnText(stmt, 1) ?? ""
+            let title = unsafe columnText(stmt, 2) ?? ""
+            let snippet = unsafe columnText(stmt, 3) ?? ""
+            let folder = unsafe columnText(stmt, 4) ?? ""
             let id = mintID(pk: pk, zid: zid)
             results.append(Note(id: id, title: title, snippet: snippet, folder: folder))
-            stepRC = sqlite3_step(stmt)
+            stepRC = unsafe sqlite3_step(stmt)
         }
-        try Self.requireDone(stepRC, db: db)
+        try unsafe Self.requireDone(stepRC, db: db)
         return results
     }
 
@@ -368,7 +368,7 @@ public actor NoteStoreReader {
     /// result — throw instead so callers can fall back to ``NoteService``.
     private static func requireDone(_ rc: Int32, db: OpaquePointer) throws(NoteStoreReaderError) {
         guard rc == SQLITE_DONE else {
-            let msg = String(cString: sqlite3_errmsg(db))
+            let msg = unsafe String(cString: sqlite3_errmsg(db))
             throw NoteStoreReaderError.sqliteError("step failed (rc=\(rc)): \(msg)")
         }
     }
@@ -390,22 +390,22 @@ public actor NoteStoreReader {
         // best-effort enrichment.
         var stmt: OpaquePointer?
         let sql = "SELECT Z_UUID FROM Z_METADATA LIMIT 1"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
+        guard unsafe sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt = unsafe stmt else {
             return nil
         }
-        defer { sqlite3_finalize(stmt) }
-        guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
-        return columnText(stmt, 0)
+        defer { unsafe sqlite3_finalize(stmt) }
+        guard unsafe sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+        return unsafe columnText(stmt, 0)
     }
 
     /// Read a TEXT column safely. Returns nil for NULL, otherwise UTF-8.
     private static func columnText(_ stmt: OpaquePointer, _ col: Int32) -> String? {
-        guard let cstr = sqlite3_column_text(stmt, col) else { return nil }
-        return String(cString: cstr)
+        guard let cstr = unsafe sqlite3_column_text(stmt, col) else { return nil }
+        return unsafe String(cString: cstr)
     }
 
     private func columnText(_ stmt: OpaquePointer, _ col: Int32) -> String? {
-        Self.columnText(stmt, col)
+        unsafe Self.columnText(stmt, col)
     }
 }
 
@@ -419,16 +419,16 @@ private func notesAutomationContains(
     _ argc: Int32,
     _ argv: UnsafeMutablePointer<OpaquePointer?>?
 ) {
-    guard argc == 2, let argv,
-          let haystackPtr = sqlite3_value_text(argv[0]),
-          let needlePtr = sqlite3_value_text(argv[1]) else {
-        sqlite3_result_int(context, 0)
+    guard argc == 2, let argv = unsafe argv,
+          let haystackPtr = unsafe sqlite3_value_text(argv[0]),
+          let needlePtr = unsafe sqlite3_value_text(argv[1]) else {
+        unsafe sqlite3_result_int(context, 0)
         return
     }
-    let haystack = String(cString: haystackPtr)
-    let needle = String(cString: needlePtr)
+    let haystack = unsafe String(cString: haystackPtr)
+    let needle = unsafe String(cString: needlePtr)
     let found = haystack.range(of: needle, options: [.caseInsensitive]) != nil
-    sqlite3_result_int(context, found ? 1 : 0)
+    unsafe sqlite3_result_int(context, found ? 1 : 0)
 }
 
 /// Errors surfaced by ``NoteStoreReader``.

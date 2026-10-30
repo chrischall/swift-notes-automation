@@ -144,9 +144,9 @@ struct NoteStoreReaderTests {
         // for deletion. Use a separate connection so we're truly testing
         // cross-connection freshness, the same shape Notes.app has.
         var mutator: OpaquePointer?
-        #expect(sqlite3_open(path, &mutator) == SQLITE_OK)
-        defer { if let m = mutator { sqlite3_close_v2(m) } }
-        let execRC = sqlite3_exec(
+        #expect(unsafe sqlite3_open(path, &mutator) == SQLITE_OK)
+        defer { if let m = unsafe mutator { unsafe sqlite3_close_v2(m) } }
+        let execRC = unsafe sqlite3_exec(
             mutator,
             "UPDATE ZICCLOUDSYNCINGOBJECT SET ZMARKEDFORDELETION = 1 WHERE Z_PK = 1",
             nil,
