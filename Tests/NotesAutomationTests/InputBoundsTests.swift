@@ -1,17 +1,16 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Public numeric inputs (`limit`, `offset`, `maxChars`, `maxLength`) are
 /// often fed straight from MCP tool arguments. An out-of-range value must
 /// clamp, never trap — a trap kills the whole host process.
 @Suite("Input bounds")
 struct InputBoundsTests {
-
     private func withReader(_ body: (NoteStoreReader) async throws -> Void) async throws {
         let path = try NoteStoreFixture.create()
         defer { try? FileManager.default.removeItem(atPath: path) }
-        try await body(try NoteStoreReader(path: path))
+        try await body(NoteStoreReader(path: path))
     }
 
     // MARK: - NoteStoreReader

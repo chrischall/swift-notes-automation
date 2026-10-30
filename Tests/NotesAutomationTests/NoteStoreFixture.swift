@@ -1,6 +1,6 @@
 import Foundation
-import SQLite3
 @testable import NotesAutomation
+import SQLite3
 
 /// Builds a throwaway SQLite file that matches the subset of the Notes.app
 /// schema that ``NoteStoreReader`` queries. Purpose:
@@ -22,31 +22,31 @@ enum NoteStoreFixture {
     /// schema. Only the columns the reader queries are included; real
     /// Notes has ~100 more columns we don't care about here.
     static let schema = """
-        CREATE TABLE Z_PRIMARYKEY (
-            Z_ENT INTEGER PRIMARY KEY,
-            Z_NAME VARCHAR,
-            Z_SUPER INTEGER,
-            Z_MAX INTEGER
-        );
-        CREATE TABLE Z_METADATA (
-            Z_VERSION INTEGER PRIMARY KEY,
-            Z_UUID VARCHAR,
-            Z_PLIST BLOB
-        );
-        CREATE TABLE ZICCLOUDSYNCINGOBJECT (
-            Z_PK INTEGER PRIMARY KEY,
-            Z_ENT INTEGER,
-            ZIDENTIFIER VARCHAR,
-            ZTITLE1 VARCHAR,
-            ZTITLE2 VARCHAR,
-            ZSNIPPET VARCHAR,
-            ZFOLDER INTEGER,
-            ZFOLDERTYPE INTEGER,
-            ZMARKEDFORDELETION INTEGER,
-            ZMODIFICATIONDATE1 REAL,
-            ZCREATIONDATE1 REAL
-        );
-        """
+    CREATE TABLE Z_PRIMARYKEY (
+        Z_ENT INTEGER PRIMARY KEY,
+        Z_NAME VARCHAR,
+        Z_SUPER INTEGER,
+        Z_MAX INTEGER
+    );
+    CREATE TABLE Z_METADATA (
+        Z_VERSION INTEGER PRIMARY KEY,
+        Z_UUID VARCHAR,
+        Z_PLIST BLOB
+    );
+    CREATE TABLE ZICCLOUDSYNCINGOBJECT (
+        Z_PK INTEGER PRIMARY KEY,
+        Z_ENT INTEGER,
+        ZIDENTIFIER VARCHAR,
+        ZTITLE1 VARCHAR,
+        ZTITLE2 VARCHAR,
+        ZSNIPPET VARCHAR,
+        ZFOLDER INTEGER,
+        ZFOLDERTYPE INTEGER,
+        ZMARKEDFORDELETION INTEGER,
+        ZMODIFICATIONDATE1 REAL,
+        ZCREATIONDATE1 REAL
+    );
+    """
 
     struct SeedNote {
         let pk: Int
@@ -107,10 +107,10 @@ enum NoteStoreFixture {
         for f in folders {
             let idVal = f.identifier.map { "'\(escape($0))'" } ?? "NULL"
             let sql = """
-                INSERT INTO ZICCLOUDSYNCINGOBJECT
-                (Z_PK, Z_ENT, ZTITLE2, ZFOLDERTYPE, ZIDENTIFIER)
-                VALUES (\(f.pk), 2, '\(escape(f.title))', \(f.folderType), \(idVal));
-                """
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+            (Z_PK, Z_ENT, ZTITLE2, ZFOLDERTYPE, ZIDENTIFIER)
+            VALUES (\(f.pk), 2, '\(escape(f.title))', \(f.folderType), \(idVal));
+            """
             try unsafe exec(db, sql)
         }
 
@@ -118,13 +118,13 @@ enum NoteStoreFixture {
             let folder = n.folderPK.map(String.init) ?? "NULL"
             let deleted = n.markedForDeletion ? 1 : 0
             let sql = """
-                INSERT INTO ZICCLOUDSYNCINGOBJECT
-                (Z_PK, Z_ENT, ZIDENTIFIER, ZTITLE1, ZSNIPPET, ZFOLDER,
-                 ZMARKEDFORDELETION, ZMODIFICATIONDATE1)
-                VALUES (\(n.pk), 1, '\(escape(n.identifier))',
-                        '\(escape(n.title))', '\(escape(n.snippet))',
-                        \(folder), \(deleted), \(n.modificationDate));
-                """
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+            (Z_PK, Z_ENT, ZIDENTIFIER, ZTITLE1, ZSNIPPET, ZFOLDER,
+             ZMARKEDFORDELETION, ZMODIFICATIONDATE1)
+            VALUES (\(n.pk), 1, '\(escape(n.identifier))',
+                    '\(escape(n.title))', '\(escape(n.snippet))',
+                    \(folder), \(deleted), \(n.modificationDate));
+            """
             try unsafe exec(db, sql)
         }
 

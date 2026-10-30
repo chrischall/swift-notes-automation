@@ -1,5 +1,5 @@
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Guards the test fixture itself: its `Mutex`-backed state must record
 /// every call and serve queued responses FIFO even under concurrent use.

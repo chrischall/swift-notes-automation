@@ -1,7 +1,7 @@
 import Foundation
+@testable import NotesAutomation
 import SQLite3
 import Testing
-@testable import NotesAutomation
 
 /// The reader must never write to Notes.app's store — not even through
 /// SQLite's own WAL maintenance. When the reader's handle is the *last*
@@ -9,7 +9,6 @@ import Testing
 /// handle checkpoints the WAL into the main file on close. `PRAGMA query_only` blocks SQL writes but not that.
 @Suite("NoteStoreReader WAL safety")
 struct NoteStoreReaderWALTests {
-
     /// Builds a WAL-mode fixture whose latest commit lives only in the
     /// `-wal` file (no `-shm`), as Notes.app leaves the store when it
     /// quits without a final checkpoint. Returns the directory and the
@@ -32,7 +31,8 @@ struct NoteStoreReaderWALTests {
         #expect(unsafe sqlite3_exec(
             writer,
             "UPDATE ZICCLOUDSYNCINGOBJECT SET ZTITLE1 = 'Cookies (from WAL)' WHERE Z_PK = 5",
-            nil, nil, nil) == SQLITE_OK)
+            nil, nil, nil
+        ) == SQLITE_OK)
 
         // Snapshot db + wal while the writer still holds them open, so
         // the copy has an un-checkpointed WAL and no -shm.
@@ -110,7 +110,8 @@ struct NoteStoreReaderWALTests {
         #expect(unsafe sqlite3_exec(
             writer,
             "UPDATE ZICCLOUDSYNCINGOBJECT SET ZTITLE1 = 'Cookies v2' WHERE Z_PK = 5",
-            nil, nil, nil) == SQLITE_OK)
+            nil, nil, nil
+        ) == SQLITE_OK)
 
         let titles = try await reader.list(limit: 20).map(\.title)
         #expect(titles.contains("Cookies v2"))

@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Pins the typed-throws contract: `NoteStoreReader` only ever throws
 /// `NoteStoreReaderError`, and `NSAppleScriptRunner` only ever throws
@@ -27,7 +27,7 @@ struct TypedThrowsTests {
     @Test("NoteStoreReader queries throw NoteStoreReaderError without a cast")
     func readerQueries() async throws {
         let path = try NoteStoreFixture.create()
-                let reader = try NoteStoreReader(path: path)
+        let reader = try NoteStoreReader(path: path)
         // Remove the store after init so every query's fresh open fails.
         try FileManager.default.removeItem(atPath: path)
         do {
@@ -53,15 +53,17 @@ struct TypedThrowsTests {
     /// Takes the concrete type, so passing a `catch`-bound `error` only
     /// compiles when the `do` body's thrown type is `NoteStoreReaderError`.
     private static func isNotAccessible(_ error: NoteStoreReaderError) -> Bool {
-        if case .databaseNotAccessible = error { return true }
+        if case .databaseNotAccessible = error {
+            return true
+        }
         return false
     }
 
     @Test("NSAppleScriptRunner.run is typed as throws(AppleScriptError)")
     func runnerRunSignature() {
-        // Compile-time check only — never reaches the AppleScript bridge.
+        /// Compile-time check only — never reaches the AppleScript bridge.
         func requireTyped(
-            _ run: (String) async throws(AppleScriptError) -> String
+            _: (String) async throws(AppleScriptError) -> String
         ) {}
         requireTyped(NSAppleScriptRunner().run(source:))
     }

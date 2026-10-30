@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// The list/search snippet preview length is a named constant, not a magic
 /// number, and the generated AppleScript truncates to it.

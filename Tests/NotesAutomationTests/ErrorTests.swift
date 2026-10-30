@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 @Suite("Error types")
 struct ErrorTests {
@@ -18,9 +18,9 @@ struct ErrorTests {
     @Test("AppleScriptError.errorDescription labels each case")
     func appleScriptLocalizedError() {
         #expect(AppleScriptError.runtime("oops").errorDescription
-                == "AppleScript runtime error: oops")
+            == "AppleScript runtime error: oops")
         #expect(AppleScriptError.compile("nope").errorDescription
-                == "AppleScript compile error: nope")
+            == "AppleScript compile error: nope")
     }
 
     // MARK: - NoteServiceError
@@ -36,8 +36,8 @@ struct ErrorTests {
     @Test("NoteServiceError.errorDescription labels each case")
     func noteServiceLocalizedError() {
         #expect(NoteServiceError.invalidInput("title is required").errorDescription
-                == "Invalid input: title is required")
+            == "Invalid input: title is required")
         #expect(NoteServiceError.scriptFailure("parse failed").errorDescription
-                == "Notes script failure: parse failed")
+            == "Notes script failure: parse failed")
     }
 }

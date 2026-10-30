@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Security regression tests: every value interpolated into an AppleScript
 /// string literal must have BOTH backslashes and double-quotes escaped, in

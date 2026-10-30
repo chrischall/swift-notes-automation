@@ -25,6 +25,10 @@ swift test --filter NoteServiceTests.parseNotes        # single test
 swift test --filter NSAppleScriptRunnerTests           # whole suite by name
 NOTES_AUTOMATION_INTEGRATION=1 swift test              # also run AppleScript live suites
 NOTES_SQLITE_INTEGRATION=1 swift test                  # also run NoteStoreReader integration suite
+
+# Formatting (config: .swiftformat, shared with the sibling *-automation packages)
+swiftformat Sources Tests          # apply formatting
+swiftformat Sources Tests --lint   # check only, non-zero exit on diffs — CI runs this
 ```
 
 - Three test suites are opt-in, gated by env vars:
@@ -32,7 +36,7 @@ NOTES_SQLITE_INTEGRATION=1 swift test                  # also run NoteStoreReade
   - `NSAppleScriptRunnerTests` (`NOTES_AUTOMATION_INTEGRATION=1`) — exercises the real `NSAppleScript` bridge with trivial scripts (no permission needed). Opt-in because the bridge misbehaves inside xctest bundles on recent macOS — see the AppleScript quirks section below.
   - `NoteStoreReaderIntegrationTests` (`NOTES_SQLITE_INTEGRATION=1`) — exercises the real `NoteStore.sqlite`. Requires **Full Disk Access** for the test binary.
 - Without the env var, every test in those suites is skipped via a `.disabled(if:)` trait, so CI stays deterministic and permission-prompt-free.
-- Release is **release-please**-driven, not tag-driven: merging Conventional-Commit PRs to `main` makes `.github/workflows/release-please.yml` open/update a release PR; merging that PR cuts the `vX.Y.Z` tag + GitHub Release. See *Pull requests & release notes* below. CI (`.github/workflows/ci.yml`, on the shared `[self-hosted, macOS]` runner) runs `swift build` + `swift test` as the final merge gate.
+- Release is **release-please**-driven, not tag-driven: merging Conventional-Commit PRs to `main` makes `.github/workflows/release-please.yml` open/update a release PR; merging that PR cuts the `vX.Y.Z` tag + GitHub Release. See *Pull requests & release notes* below. CI (`.github/workflows/ci.yml`, on the shared `[self-hosted, macOS]` runner) runs `swift build` + `swift test` + `swiftformat Sources Tests --lint` as the final merge gate.
 
 ## Architecture
 

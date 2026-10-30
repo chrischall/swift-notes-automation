@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// End-to-end tests for the read/write surface added alongside the
 /// original CRUD: ``NoteService/get(id:)``, ``NoteService/update(id:title:body:folder:)``,
@@ -41,7 +41,7 @@ struct NoteReadWriteIntegrationTests {
         // A body comfortably longer than the ~200-char snippet cap so we
         // can prove `get` is not returning the truncated preview.
         let token = String(UUID().uuidString.prefix(8))
-        let longBody = (1...40).map { "Paragraph \($0) — token \(token)." }.joined(separator: "\n")
+        let longBody = (1 ... 40).map { "Paragraph \($0) — token \(token)." }.joined(separator: "\n")
         let title = "GetTest-\(token)"
 
         let id = try await service.create(title: title, body: longBody, folder: testFolder)
@@ -50,10 +50,10 @@ struct NoteReadWriteIntegrationTests {
         let detail = try await service.get(id: id)
         #expect(detail.title == title)
         #expect(detail.folder == testFolder)
-        #expect(detail.plainText.count > 200)          // NOT snippet-truncated
+        #expect(detail.plainText.count > 200) // NOT snippet-truncated
         #expect(detail.plainText.contains("Paragraph 40"))
-        #expect(detail.html.localizedCaseInsensitiveContains("<"))  // real HTML
-        #expect(detail.creationDate != nil)             // isoDate handler works
+        #expect(detail.html.localizedCaseInsensitiveContains("<")) // real HTML
+        #expect(detail.creationDate != nil) // isoDate handler works
         #expect(detail.modificationDate != nil)
     }
 

@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// `NoteStoreReader.search` promises a case-insensitive substring match,
 /// the same contract as the AppleScript path. SQLite's built-in `LOWER()`
@@ -8,7 +8,6 @@ import Testing
 /// have to be kept out of the match.
 @Suite("NoteStoreReader search matching")
 struct NoteStoreReaderSearchMatchingTests {
-
     private static let folders: [NoteStoreFixture.SeedFolder] = [.init(pk: 100, title: "Notes")]
 
     private static func note(_ pk: Int, _ title: String, _ snippet: String = "") -> NoteStoreFixture.SeedNote {

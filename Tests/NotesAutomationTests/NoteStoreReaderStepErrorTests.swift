@@ -1,14 +1,13 @@
 import Foundation
+@testable import NotesAutomation
 import SQLite3
 import Testing
-@testable import NotesAutomation
 
 /// A query can prepare cleanly and still fail while stepping (SQLITE_BUSY
 /// under a Notes.app write, SQLITE_CORRUPT, SQLITE_IOERR, …). The reader
 /// must surface that as an error, never as a short or empty result.
 @Suite("NoteStoreReader step errors")
 struct NoteStoreReaderStepErrorTests {
-
     /// Replaces `ZICCLOUDSYNCINGOBJECT` with a view whose `ZTITLE1` /
     /// `ZTITLE2` column raises a runtime error (`abs(INT64_MIN)` →
     /// "integer overflow") for one row. `sqlite3_prepare_v2` succeeds;
@@ -21,15 +20,15 @@ struct NoteStoreReaderStepErrorTests {
         }
         defer { unsafe sqlite3_close_v2(db) }
         let sql = """
-            ALTER TABLE ZICCLOUDSYNCINGOBJECT RENAME TO RAW_OBJECTS;
-            CREATE VIEW ZICCLOUDSYNCINGOBJECT AS
-            SELECT Z_PK, Z_ENT, ZIDENTIFIER,
-                   CASE WHEN Z_PK = 2 THEN abs(-9223372036854775808) ELSE ZTITLE1 END AS ZTITLE1,
-                   CASE WHEN Z_PK = 101 THEN abs(-9223372036854775808) ELSE ZTITLE2 END AS ZTITLE2,
-                   ZSNIPPET, ZFOLDER, ZFOLDERTYPE, ZMARKEDFORDELETION,
-                   ZMODIFICATIONDATE1, ZCREATIONDATE1
-            FROM RAW_OBJECTS;
-            """
+        ALTER TABLE ZICCLOUDSYNCINGOBJECT RENAME TO RAW_OBJECTS;
+        CREATE VIEW ZICCLOUDSYNCINGOBJECT AS
+        SELECT Z_PK, Z_ENT, ZIDENTIFIER,
+               CASE WHEN Z_PK = 2 THEN abs(-9223372036854775808) ELSE ZTITLE1 END AS ZTITLE1,
+               CASE WHEN Z_PK = 101 THEN abs(-9223372036854775808) ELSE ZTITLE2 END AS ZTITLE2,
+               ZSNIPPET, ZFOLDER, ZFOLDERTYPE, ZMARKEDFORDELETION,
+               ZMODIFICATIONDATE1, ZCREATIONDATE1
+        FROM RAW_OBJECTS;
+        """
         guard unsafe sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
             throw NoteStoreFixture.FixtureError.execFailed(unsafe String(cString: sqlite3_errmsg(db)))
         }

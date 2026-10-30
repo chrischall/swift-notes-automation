@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Tests for the full-body read path: ``NoteDetail`` and
 /// ``NoteService/get(id:)``. Unlike list/search — which return a
@@ -8,9 +8,9 @@ import Testing
 /// untruncated body in both plain-text and HTML form, plus dates.
 @Suite("NoteDetail / get")
 struct NoteDetailTests {
-    // A record separator (ASCII 0x1E) delimits `get`'s fields because the
-    // body itself contains newlines and tabs, so the tab/newline scheme
-    // used by list/search can't be reused here.
+    /// A record separator (ASCII 0x1E) delimits `get`'s fields because the
+    /// body itself contains newlines and tabs, so the tab/newline scheme
+    /// used by list/search can't be reused here.
     private var sep: String { NoteService.detailFieldSeparator }
 
     // MARK: - NoteDetail value type
@@ -95,7 +95,9 @@ struct NoteDetailTests {
         #expect(d?.plainText == "just a body")
     }
 
-    @Test("parseNoteDetail reads the wall-clock stamps in the zone in effect at parse time, not one captured at first use")
+    @Test(
+        "parseNoteDetail reads the wall-clock stamps in the zone in effect at parse time, not one captured at first use"
+    )
     func parseNoteDetailUsesCurrentZone() throws {
         let raw = ["id", "T", "F", "2026-01-15T09:30:00", "2026-07-01T00:00:05", "p", "h"]
             .joined(separator: sep)

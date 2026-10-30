@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Tests for offset-based pagination on list/search, so callers can page
 /// through a large note library rather than being capped at a single

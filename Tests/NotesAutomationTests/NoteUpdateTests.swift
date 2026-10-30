@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Tests for ``NoteService/update(id:title:body:folder:)`` — editing an
 /// existing note's title, body, and/or containing folder in place.

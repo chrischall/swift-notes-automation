@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import NotesAutomation
+import Testing
 
 /// Tests for folder enumeration — ``NoteService/folders()`` (AppleScript)
 /// and ``NoteStoreReader/folders()`` (SQLite). Both let a caller browse

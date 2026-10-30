@@ -1,5 +1,5 @@
-import Testing
 @testable import NotesAutomation
+import Testing
 
 @Suite("Note")
 struct NoteTests {

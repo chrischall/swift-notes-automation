@@ -1,0 +1,32 @@
+# swiftformat config — matches repo house style.
+# Run:  swiftformat .
+# Lint: swiftformat . --lint
+
+--swiftversion 6.4
+--maxwidth 120
+
+# Prefer `case let .foo(x)` over `case .foo(let x)`.
+--patternlet hoist
+
+# Don't indent `#if` contents — standard Swift style keeps them flush left.
+--ifdef no-indent
+
+# Keep short property / function bodies on one line — cleaner for helpers
+# like `var nonEmpty: String? { isEmpty ? nil : self }` or tiny actor
+# mutators.
+--disable wrapPropertyBodies
+--disable wrapFunctionBodies
+
+# AppleScript embedded in multi-line string literals often exceeds maxwidth
+# and we can't reflow it without breaking the script. `wrap` also tries to
+# reflow string interpolations in ways that reduce readability — leave
+# that to the author.
+--disable wrap
+
+# --swiftversion 6.4 would switch these on/up. Kept at their pre-bump
+# behaviour: `swiftTestingTestCaseNames` rewrites every `@Test("…")` into a
+# raw-identifier function name, and `--trailing-commas always` adds commas to
+# every multi-line argument/parameter list. Pure churn; opt in deliberately,
+# not as a side effect of a toolchain bump.
+--disable swiftTestingTestCaseNames
+--trailing-commas collections-only
