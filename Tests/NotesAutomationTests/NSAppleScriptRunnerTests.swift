@@ -122,7 +122,7 @@ struct NSAppleScriptRunnerTests {
         do {
             _ = try await runner.run(source: "error \"\(distinctive)\"")
             Issue.record("expected the script to throw")
-        } catch let error as AppleScriptError {
+        } catch {
             guard case .runtime(let message) = error else {
                 Issue.record("expected .runtime, got \(error)")
                 return

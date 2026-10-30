@@ -1,9 +1,5 @@
 import Foundation
 
-#if canImport(OSAKit)
-import OSAKit
-#endif
-
 /// Production ``AppleScriptRunner`` backed by `NSAppleScript`.
 ///
 /// Each call to ``run(source:)`` constructs and executes its own
@@ -50,10 +46,15 @@ public struct NSAppleScriptRunner: AppleScriptRunner {
     /// passes, so the main-thread invariant documented above is
     /// established in exactly one place — and can be asserted by tests
     /// without needing Notes.app or an Automation permission grant.
-    static func onMainThread<T: Sendable>(
-        _ body: @MainActor @Sendable () throws -> T
-    ) async rethrows -> T {
-        try await MainActor.run(body: body)
+    ///
+    /// Typed-throws generic so the closure's error type reaches the
+    /// caller intact. Calling a `@MainActor` closure from this
+    /// nonisolated `async` context is itself the hop — the same thing
+    /// `MainActor.run` does, without erasing the error to `any Error`.
+    static func onMainThread<T: Sendable, E: Error>(
+        _ body: @MainActor @Sendable () throws(E) -> T
+    ) async throws(E) -> T {
+        try await body()
     }
 
     /// Compiles and executes `source`, returning the scalar result as a
@@ -65,10 +66,10 @@ public struct NSAppleScriptRunner: AppleScriptRunner {
     /// - Throws: ``AppleScriptError/compile(_:)`` when the source cannot
     ///   be constructed; ``AppleScriptError/runtime(_:)`` when
     ///   AppleScript reports an error at execution time.
-    public func run(source: String) async throws -> String {
+    public func run(source: String) async throws(AppleScriptError) -> String {
         // Constructed *and* executed inside the hop: `NSAppleScript` is
         // not `Sendable`, so its whole lifetime stays on one thread.
-        try await Self.onMainThread { () throws -> String in
+        try await Self.onMainThread { () throws(AppleScriptError) -> String in
             guard let script = NSAppleScript(source: source) else {
                 throw AppleScriptError.compile("Failed to construct NSAppleScript")
             }
