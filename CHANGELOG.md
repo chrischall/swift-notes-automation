@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/chrischall/swift-notes-automation/compare/v2.1.1...v3.0.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* every public NoteService method now throws(NotesError) and AppleScriptRunner.run throws(AppleScriptError); NoteServiceError is a deprecated alias. See README, Migrating to 3.0.
+
+### Features
+
+* adopt typed throws on the public NoteService API ([c710a48](https://github.com/chrischall/swift-notes-automation/commit/c710a482742fc7a287532ef05288f96fcf764c27))
+
 ## [2.1.1](https://github.com/chrischall/swift-notes-automation/compare/v2.1.0...v2.1.1) (2026-10-30)
 
 
